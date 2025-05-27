@@ -16,12 +16,22 @@
 *.code-workspace
 
 ## Archivos de caché/bases de datos de Visual Studio
-.vs/*
-# No ignorar ciertos archivos de configuración del proyecto en .vs si se comparten
-!*.vs/ProjectSettings.json
-!*.vs/actions.xml
-!*.vs/browse.VC.db
-!*.vs/sqlite3/storage.ide
+# Ignora todas las carpetas .vs y su contenido, recursivamente
+**/.vs/
+
+# No ignorar ciertos archivos de configuración del proyecto en .vs si se comparten.
+# Asegúrate de que estos archivos realmente necesitan ser compartidos y no son específicos del usuario/máquina.
+# La sintaxis para re-incluir archivos de un directorio ignorado puede ser compleja y a veces no funciona como se espera
+# si el directorio padre está completamente ignorado. Es preferible que los archivos compartidos no estén en directorios ignorados.
+# Si necesitas estos archivos, considera si pueden vivir fuera de la carpeta .vs.
+# !**/.vs/ProjectSettings.json
+# !**/.vs/actions.xml
+#
+# Los siguientes son generalmente archivos de caché/DB locales y NO deberían ser re-incluidos o versionados:
+# !**/.vs/browse.VC.db
+# !**/.vs/sqlite3/storage.ide
+
+# Otros archivos de caché/DB de Visual Studio (algunos podrían estar dentro de .vs y ya cubiertos por **/.vs/)
 *.VC.db
 *.VC.VC.opendb
 *.pdb.ilk
@@ -41,8 +51,8 @@
 [Rr]elease/
 [Rr]eleases/
 [Rr]elease[Ss]ymbols/
-[Xx]64/      # Para compilaciones de 64 bits
-[Ww][Ii][Nn]32/  # Para compilaciones de 32 bits (aunque "Win32" a veces se usa para x86)
+[Xx]64/     # Para compilaciones de 64 bits
+[Ww][Ii][Nn]32/ # Para compilaciones de 32 bits (aunque "Win32" a veces se usa para x86)
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
@@ -66,15 +76,16 @@ bld/
 *.map
 *.sbr
 *.bsc
-*.pch # Encabezados precompilados
-*.exp # Archivos de exportación
-*.idb # Archivos de estado del depurador incremental
+*.pch  # Encabezados precompilados
+*.ipch # Caché de IntelliSense Precompiled Headers (archivos grandes, importante ignorar)
+*.exp  # Archivos de exportación
+*.idb  # Archivos de estado del depurador incremental
 *.tlog # Registros de seguimiento de compilación
 *.manifest
 *.res  # Archivos de recursos compilados
-*.snt # Archivos de nombre seguro (si se usan)
-*.pfx # Certificados con clave privada - ¡NUNCA subir al repositorio!
-*.cer # Certificados públicos (si son generados por el build y no son fuente)
+*.snt  # Archivos de nombre seguro (si se usan)
+*.pfx  # Certificados con clave privada - ¡NUNCA subir al repositorio!
+*.cer  # Certificados públicos (si son generados por el build y no son fuente)
 
 # Carpetas y archivos de paquetes (ej. NuGet)
 ######################################
