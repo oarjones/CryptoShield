@@ -1,32 +1,167 @@
-# Prerequisites
-*.d
+# Archivos generales de Visual Studio
+######################################
+## Archivos de solución y proyecto de Visual Studio (.user son específicos del usuario)
+*.sln.DotSettings.user
+*.suo
+*.user
+*.vcxproj.filters # Usualmente no es específico del usuario, pero a veces sí.
+*.vcxproj.user
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+## Visual Studio Code (VS Code) - configuraciones específicas del espacio de trabajo
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
 
-# Precompiled Headers
-*.gch
-*.pch
+## Archivos de caché/bases de datos de Visual Studio
+.vs/*
+# No ignorar ciertos archivos de configuración del proyecto en .vs si se comparten
+!*.vs/ProjectSettings.json
+!*.vs/actions.xml
+!*.vs/browse.VC.db
+!*.vs/sqlite3/storage.ide
+*.VC.db
+*.VC.VC.opendb
+*.pdb.ilk
+*.ilk
+*.sdf
+*.opendb
+*.VC.db-*
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Salidas de compilación
+######################################
+## Directorios comunes de salida de compilación
+[Bb]in/
+[Bb]in[Oo]bj/
+[Dd]ebug/
+[Dd]ebug[Pp]ublic/
+[Dd]ebug[Ss]ymbols/
+[Rr]elease/
+[Rr]eleases/
+[Rr]elease[Ss]ymbols/
+[Xx]64/      # Para compilaciones de 64 bits
+[Ww][Ii][Nn]32/  # Para compilaciones de 32 bits (aunque "Win32" a veces se usa para x86)
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
 
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
+## Archivos específicos de salida de compilación (por extensión)
+# Ejecutables, bibliotecas, drivers, archivos de símbolos
 *.exe
-*.out
-*.app
+*.dll
+*.obj
+*.obj.rsp
+*.o
+*.lib
+*.pdb
+*.sys # Archivo de driver
+*.cat # Archivo de catálogo de seguridad
+*.inf # Si el .inf es un artefacto de compilación. Si es un archivo fuente,
+      # considera hacerlo más específico (ej: */Output/*.inf) o no ignorarlo.
+*.map
+*.sbr
+*.bsc
+*.pch # Encabezados precompilados
+*.exp # Archivos de exportación
+*.idb # Archivos de estado del depurador incremental
+*.tlog # Registros de seguimiento de compilación
+*.manifest
+*.res  # Archivos de recursos compilados
+*.snt # Archivos de nombre seguro (si se usan)
+*.pfx # Certificados con clave privada - ¡NUNCA subir al repositorio!
+*.cer # Certificados públicos (si son generados por el build y no son fuente)
+
+# Carpetas y archivos de paquetes (ej. NuGet)
+######################################
+[Pp]ackages/
+*.nupkg
+*.snupkg
+# Si usas package restore con un directorio local, puede que quieras ignorar node_modules también
+# node_modules/
+
+# Archivos de empaquetado (instaladores)
+######################################
+*.msi
+*.msix
+*.msm
+*.msp
+*.appx
+*.appxbundle
+*.appxupload
+
+# Archivos temporales y de copia de seguridad
+######################################
+*~
+*.tmp
+*.TMP
+*.temp
+*.TEMP
+*.bak
+*.orig
+*.log # Archivos de log genéricos (si no son importantes para el historial)
+
+# Archivos relacionados con pruebas
+######################################
+*.trx # Resultados de pruebas de Visual Studio
+*.coverage
+*.cover
+*.codecov
+[Tt]est[Rr]esult*/
+[Cc]overage[Rr]eport*/
+
+# Registros de instaladores (ej. InstallShield)
+InstallShield.*
+*_i.csm
+*_i.isc
+*_i.ism
+*_i.Bld
+*_i.Ini
+*_i.Log
+*_i.Prq
+*_i.Sav
+*.Target
+
+# Archivos de herramientas específicas
+######################################
+## ReSharper
+*_ReSharperReport/
+*.resharper.user
+*.resharperoptions
+*.DotSettings.user
+
+## StyleCop
+StyleCopReport.xml
+StyleCop.Cache
+
+## NCover
+NCover.*
+
+## NCrunch
+_NCrunch_*.*
+*.ncrunch.*
+*.[Dd]ot[Nn]et[Cc]overage/*
+
+# Otros
+######################################
+## Archivos generados por el sistema operativo
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Archivos de configuración local (si es necesario)
+# appsettings.Development.json
+
+# Reglas de ignorar específicas del proyecto (si las generales no son suficientes)
+# -------------------------------------------------------------------
+# Para el proyecto CryptoShieldDriver:
+# Las reglas generales como [Xx]64/ y [Dd]ebug/ deberían cubrir las salidas
+# como D:\CryptoShield\Driver\CryptoShield\x64\Debug\CryptoShield.sys.
+# Puedes añadir rutas más específicas como:
+# Driver/CryptoShield/x64/
+# Pero las reglas genéricas suelen ser más fáciles de mantener.
