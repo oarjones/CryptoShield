@@ -7,6 +7,10 @@
 *.vcxproj.filters # Usualmente no es específico del usuario, pero a veces sí.
 *.vcxproj.user
 
+
+## Dcoumentación del proyecto
+/Docs/
+
 ## Visual Studio Code (VS Code) - configuraciones específicas del espacio de trabajo
 .vscode/*
 !.vscode/settings.json
