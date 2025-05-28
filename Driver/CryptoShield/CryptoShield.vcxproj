@@ -116,6 +116,15 @@
     </DriverSign>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CryptoShield.c" />
+    <ClCompile Include="FileMonitor.c" />
+    <ClCompile Include="Communication.c" />
+    <ClCompile Include="Utilities.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CryptoShield.h" />
+  </ItemGroup>
+  <ItemGroup>
     <Inf Include="CryptoShield.inf" />
   </ItemGroup>
   <ItemGroup>

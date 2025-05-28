@@ -1,18 +1,56 @@
 ;
 ; CryptoShield.inf
+; Minifilter Driver Installation File
 ;
 
 [Version]
 Signature   = "$WINDOWS NT$"
-Class       = System ; TODO: specify appropriate Class
-ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318} ; TODO: specify appropriate ClassGuid
+Class       = "ActivityMonitor"
+ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
 Provider    = %ManufacturerName%
+DriverVer   = 07/29/2024,1.0.0.0 ; Current date, adjust if necessary
 CatalogFile = CryptoShield.cat
-DriverVer   = ; TODO: set DriverVer in stampinf property pages
-PnpLockdown = 1
+PnpLockdown = 1 ; Ensures PnP Lockdown for drivers
 
-[DestinationDirs]
-DefaultDestDir = 13
+[Manufacturer]
+%ManufacturerName% = Standard,NT$ARCH$
+
+[Standard.NT$ARCH$]
+%CryptoShield.DeviceDesc% = CryptoShield.Install, FLT_MGR\CryptoShield
+
+; This section is typically for non-PnP drivers or to provide a default install option.
+; For minifilters, the service installation and minifilter registration are key.
+[DefaultInstall]
+OptionDesc          = %CryptoShield.SvcDesc%
+Purpose             = %CryptoShield.Purpose%
+CopyFiles           = CryptoShield.Files.Driver
+
+[DefaultInstall.Services]
+AddService          = %CryptoShield.SvcName%,,CryptoShield.Service
+
+; This section defines the operations for installing the driver files and setting up registry keys.
+; It is referenced from the [Standard.NT$ARCH$] section.
+[CryptoShield.Install]
+CopyFiles           = CryptoShield.Files.Driver
+AddReg              = CryptoShield.AddReg.MiniFilter ; Changed from Optional CryptoShield.AddReg to the required MiniFilter one
+
+[CryptoShield.Service]
+DisplayName         = %CryptoShield.SvcDesc%
+Description         = %CryptoShield.Purpose%
+ServiceType         = 2  ; SERVICE_FILE_SYSTEM_DRIVER
+StartType           = 0  ; SERVICE_BOOT_START
+ErrorControl        = 1  ; SERVICE_ERROR_NORMAL
+LoadOrderGroup      = "FSFilter Activity Monitor"
+ServiceBinary       = %12%\CryptoShield.sys ; %12% is drivers directory (System32\drivers)
+AddReg              = CryptoShield.AddReg.MiniFilter ; Ensures minifilter registration keys are applied
+
+[CryptoShield.AddReg.MiniFilter]
+HKR,"Instances","DefaultInstance",0x00000000,%CryptoShield.DefaultInstance%
+HKR,"Instances\%CryptoShield.DefaultInstance%","Altitude",0x00000000,"370040"
+HKR,"Instances\%CryptoShield.DefaultInstance%","Flags",0x00010001,"0x0" ; FLTFL_REGISTRATION_FLAG_INSTANCE_CONTEXT_CLEANUP_CALLBACK (0x00010000) | FLTFL_INSTANCE_DETACHED_MANUALLY_ALLOWED (0x00000001) - but 0x0 is fine to start
+
+[CryptoShield.Files.Driver]
+CryptoShield.sys,,,0x00000040 ; COPYFLG_NOSKIP - copy even if it exists
 
 [SourceDisksNames]
 1 = %DiskName%,,,""
@@ -20,43 +58,16 @@ DefaultDestDir = 13
 [SourceDisksFiles]
 CryptoShield.sys = 1,,
 
-;*****************************************
-; Install Section
-;*****************************************
-
-[Manufacturer]
-%ManufacturerName% = Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
-
-[Standard.NT$ARCH$.10.0...16299]
-%CryptoShield.DeviceDesc% = CryptoShield_Device, Root\CryptoShield ; TODO: edit hw-id
-
-[CryptoShield_Device.NT]
-CopyFiles = File_Copy
-
-[File_Copy]
-CryptoShield.sys
-
-;-------------- Service installation
-[CryptoShield_Device.NT.Services]
-AddService = CryptoShield,%SPSVCINST_ASSOCSERVICE%, CryptoShield_Service_Inst
-
-; -------------- CryptoShield driver install sections
-[CryptoShield_Service_Inst]
-DisplayName    = %CryptoShield.SVCDESC%
-ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
-StartType      = 3               ; SERVICE_DEMAND_START
-ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %13%\CryptoShield.sys
-
-[CryptoShield_Device.NT.Wdf]
-KmdfService = CryptoShield, CryptoShield_wdfsect
-
-[CryptoShield_wdfsect]
-KmdfLibraryVersion = $KMDFVERSION$
+[DestinationDirs]
+CryptoShield.Files.Driver = 12 ; DIRID_DRIVERS - %SystemRoot%\System32\drivers
+DefaultDestDir = 12             ; Default to drivers directory
 
 [Strings]
-SPSVCINST_ASSOCSERVICE = 0x00000002
-ManufacturerName = "<Your manufacturer name>" ;TODO: Replace with your manufacturer name
-DiskName = "CryptoShield Installation Disk"
-CryptoShield.DeviceDesc = "CryptoShield Device"
-CryptoShield.SVCDESC = "CryptoShield Service"
+ManufacturerName        = "CryptoShield Inc." ; Placeholder, replace with actual
+CryptoShield.SvcName    = "CryptoShield"
+CryptoShield.DeviceDesc = "CryptoShield Minifilter Driver"
+CryptoShield.SvcDesc    = "CryptoShield File System Monitor"
+CryptoShield.Purpose    = "Monitors file system activity for CryptoShield."
+DiskName                = "CryptoShield Installation Source"
+CryptoShield.DefaultInstance = "CryptoShield Instance" ; Changed from "CryptoShield Default Instance" for slight variation from example
+SPSVCINST_ASSOCSERVICE = 0x00000002 ; Required for AddService if not already defined globally by system
