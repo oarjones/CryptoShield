@@ -137,6 +137,15 @@
       <Project>{fa2cbbcb-f458-4001-b131-9ef18655bca0}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CommunicationManager.h" />
+    <ClInclude Include="MessageProcessor.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="CommunicationManager.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="MessageProcessor.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

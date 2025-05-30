@@ -26,4 +26,23 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CryptoShield.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="CryptoShield.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FileMonitor.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Communication.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Utilities.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
 </Project>
