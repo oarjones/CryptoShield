@@ -1,0 +1,115 @@
+@echo off
+REM CryptoShield Uninstallation Script
+REM Run as Administrator
+
+setlocal enabledelayedexpansion
+
+echo ===============================================
+echo CryptoShield Anti-Ransomware Uninstallation
+echo ===============================================
+echo.
+
+REM Check for administrator privileges
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo ERROR: This script must be run as Administrator!
+    echo Right-click and select "Run as administrator"
+    pause
+    exit /b 1
+)
+
+REM Set paths
+set INSTALL_DIR=C:\Program Files\CryptoShield
+set DATA_DIR=C:\ProgramData\CryptoShield
+
+echo WARNING: This will completely remove CryptoShield from your system.
+choice /C YN /M "Do you want to continue?"
+if !errorLevel! neq 1 (
+    echo Uninstallation cancelled.
+    pause
+    exit /b 0
+)
+
+echo.
+echo [1/7] Stopping service...
+net stop CryptoShieldService >nul 2>&1
+if !errorLevel! equ 0 (
+    echo Service stopped successfully
+) else (
+    echo Service was not running
+)
+
+echo [2/7] Stopping driver...
+sc stop CryptoShield >nul 2>&1
+if !errorLevel! equ 0 (
+    echo Driver stopped successfully
+) else (
+    echo Driver was not running
+)
+
+echo [3/7] Uninstalling service...
+"%INSTALL_DIR%\CryptoShieldService.exe" /uninstall >nul 2>&1
+if !errorLevel! neq 0 (
+    REM Try manual uninstall if service executable not found
+    sc delete CryptoShieldService >nul 2>&1
+)
+
+echo [4/7] Uninstalling driver...
+sc delete CryptoShield >nul 2>&1
+if !errorLevel! equ 0 (
+    echo Driver uninstalled successfully
+) else (
+    echo WARNING: Failed to uninstall driver
+)
+
+REM Remove driver file
+if exist "%SystemRoot%\System32\drivers\CryptoShield.sys" (
+    del /F /Q "%SystemRoot%\System32\drivers\CryptoShield.sys" >nul 2>&1
+)
+
+echo [5/7] Removing firewall exception...
+netsh advfirewall firewall delete rule name="CryptoShield Service" >nul 2>&1
+
+echo [6/7] Removing installation files...
+if exist "%INSTALL_DIR%" (
+    rmdir /S /Q "%INSTALL_DIR%" >nul 2>&1
+    if !errorLevel! neq 0 (
+        echo WARNING: Failed to remove installation directory
+        echo Please manually delete: %INSTALL_DIR%
+    )
+)
+
+echo [7/7] Handling data files...
+if exist "%DATA_DIR%" (
+    echo.
+    echo Found data directory: %DATA_DIR%
+    echo This may contain logs and configuration files.
+    choice /C YN /M "Do you want to remove all data files?"
+    if !errorLevel! equ 1 (
+        rmdir /S /Q "%DATA_DIR%" >nul 2>&1
+        if !errorLevel! neq 0 (
+            echo WARNING: Failed to remove data directory
+            echo Please manually delete: %DATA_DIR%
+        ) else (
+            echo Data files removed successfully
+        )
+    ) else (
+        echo Data files preserved at: %DATA_DIR%
+    )
+)
+
+echo.
+echo ===============================================
+echo Uninstallation completed!
+echo ===============================================
+echo.
+
+REM Check if test signing was enabled
+bcdedit | findstr -i "testsigning" | findstr -i "Yes" >nul
+if !errorLevel! equ 0 (
+    echo NOTE: Test signing is still enabled on this system.
+    echo To disable it, run: bcdedit /set testsigning off
+    echo.
+)
+
+pause

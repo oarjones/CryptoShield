@@ -6,60 +6,83 @@
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
-#include "CryptoShield.h"
+#include "CryptoShield.h" // Incluye Shared.h indirectamente
 
- // Global driver context
+ // ----- Global Driver Context -----
 CRYPTOSHIELD_CONTEXT g_Context = { 0 };
 
-// Operation registration - defines which I/O operations we want to intercept
+// ----- Forward Declarations (si alguna función de este archivo se llama antes de su definición) -----
+// (No parece necesario por ahora)
+
+
+// ----- Minifilter Registration Structures -----
+
+// Operation registration - define qué operaciones I/O se interceptan (del documento técnico)
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
     { IRP_MJ_CREATE,
-      0,
-      CryptoShieldPreOperation,
-      CryptoShieldPostOperation },
+      0, // Flags (e.g., FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO)
+      PreOperationCallback,
+      PostOperationCallback },
 
     { IRP_MJ_WRITE,
       0,
-      CryptoShieldPreOperation,
-      CryptoShieldPostOperation },
+      PreOperationCallback,
+      PostOperationCallback },
 
     { IRP_MJ_SET_INFORMATION,
       0,
-      CryptoShieldPreOperation,
-      CryptoShieldPostOperation },
+      PreOperationCallback,
+      PostOperationCallback },
 
     { IRP_MJ_CLEANUP,
       0,
-      CryptoShieldPreOperation,
-      NULL },  // No post-operation needed for cleanup
+      PreOperationCallback, // O NULL si no se necesita pre-procesamiento
+      NULL },               // No se necesita post-operación para cleanup según el doc.
 
-    { IRP_MJ_OPERATION_END }
+      // Considerar otras operaciones si es relevante para la detección:
+      // { IRP_MJ_READ, 0, PreOperationCallback, PostOperationCallback },
+      // { IRP_MJ_CLOSE, 0, PreOperationCallback, NULL }, // Post-close no existe, pre-close sí.
+      // { IRP_MJ_DIRECTORY_CONTROL, 0, PreOperationCallback, PostOperationCallback }, // Para enumeración de directorios
+
+      { IRP_MJ_OPERATION_END } // Terminador de la lista
 };
 
-// Filter registration structure
+// Context registration (si se usan contextos de Stream, File, etc.)
+// Por ahora, no se definen contextos específicos en el documento técnico.
+/*
+CONST FLT_CONTEXT_REGISTRATION ContextRegistration[] = {
+    { FLT_STREAMHANDLE_CONTEXT,
+      0,
+      NULL, // CleanupContext
+      sizeof(MY_STREAMHANDLE_CONTEXT),
+      MY_STREAMHANDLE_CONTEXT_TAG },
+    { FLT_CONTEXT_END }
+};
+*/
+
+// Filter registration structure (principalmente del código original, ajustada)
 CONST FLT_REGISTRATION FilterRegistration = {
     sizeof(FLT_REGISTRATION),           // Size
-    FLT_REGISTRATION_VERSION,           // Version
-    0,                                  // Flags
-    NULL,                               // Context registration
+    FLT_REGISTRATION_VERSION,           // Version (FLT_REGISTRATION_VERSION es el actual)
+    0,                                  // Flags (e.g., FLTFL_REGISTRATION_DO_NOT_SUPPORT_SERVICE_STOP)
+    NULL,                               // ContextRegistration (NULL si no se usan contextos arriba)
     Callbacks,                          // Operation callbacks
-    CryptoShieldUnload,                 // FilterUnload
-    CryptoShieldInstanceSetup,          // InstanceSetup
-    CryptoShieldInstanceQueryTeardown,  // InstanceQueryTeardown
-    NULL,                               // InstanceTeardownStart
-    NULL,                               // InstanceTeardownComplete
-    NULL,                               // GenerateFileName
-    NULL,                               // GenerateDestinationFileName
-    NULL                                // NormalizeNameComponent
+    FilterUnloadCallback,               // FilterUnload (nombre del doc. técnico)
+    InstanceSetupCallback,              // InstanceSetup
+    InstanceQueryTeardownCallback,      // InstanceQueryTeardown
+    NULL,                               // InstanceTeardownStart (NULL si no se necesita)
+    NULL,                               // InstanceTeardownComplete (NULL si no se necesita)
+    NULL,                               // GenerateFileName (usar FltGetFileNameInformation en su lugar)
+    NULL,                               // GenerateDestinationFileName (para operaciones de renombrado/hardlink)
+    NULL                                // NormalizeNameComponent (para normalización de nombres)
+    // Faltarían callbacks de Normalización de Nombres si se quieren nombres canónicos.
 };
 
+
+// ----- Driver Entry Point -----
 /**
  * @brief Driver entry point
  * @details Initializes the minifilter driver and registers with Filter Manager
- *
- * @param DriverObject Driver object created by system
- * @param RegistryPath Registry path for driver parameters
- * @return STATUS_SUCCESS on success, appropriate error code on failure
  */
 NTSTATUS DriverEntry(
     _In_ PDRIVER_OBJECT DriverObject,
@@ -69,308 +92,219 @@ NTSTATUS DriverEntry(
     NTSTATUS status = STATUS_SUCCESS;
     PSECURITY_DESCRIPTOR sd = NULL;
     OBJECT_ATTRIBUTES oa = { 0 };
-    UNICODE_STRING portName = { 0 };
+    UNICODE_STRING portNameUnicodeString = { 0 };
 
     UNREFERENCED_PARAMETER(RegistryPath);
 
-    CS_INFO("CryptoShield driver loading, version %ws", CRYPTOSHIELD_DRIVER_VERSION);
+    CS_LOG_INFO("CryptoShield driver loading, version %ws", CRYPTOSHIELD_VERSION_STRING);
 
-    __try {
-        // Initialize driver context
-        RtlZeroMemory(&g_Context, sizeof(CRYPTOSHIELD_CONTEXT));
+    // Inicializar el contexto global del driver
+    RtlZeroMemory(&g_Context, sizeof(CRYPTOSHIELD_CONTEXT));
+    KeQuerySystemTime(&g_Context.DriverLoadTime); // Guardar el momento de carga
 
-        // Initialize synchronization objects
-        KeInitializeSpinLock(&g_Context.StatisticsLock);
-        KeInitializeSpinLock(&g_Context.ConfigLock);
-        status = ExInitializeResourceLite(&g_Context.PortResource);
-        if (!NT_SUCCESS(status)) {
-            CS_ERROR("Failed to initialize port resource: 0x%08x", status);
-            __leave;
-        }
-
-        // Set default configuration
-        g_Context.MonitoringEnabled = DEFAULT_MONITORING_ENABLED;
-        g_Context.DetectionSensitivity = DEFAULT_DETECTION_SENSITIVITY;
-
-        // Register with Filter Manager
-        status = FltRegisterFilter(DriverObject, &FilterRegistration, &g_Context.FilterHandle);
-        if (!NT_SUCCESS(status)) {
-            CS_ERROR("Failed to register filter: 0x%08x", status);
-            __leave;
-        }
-
-        // Create communication port
-        status = FltBuildDefaultSecurityDescriptor(&sd, FLT_PORT_ALL_ACCESS);
-        if (!NT_SUCCESS(status)) {
-            CS_ERROR("Failed to build security descriptor: 0x%08x", status);
-            __leave;
-        }
-
-        RtlInitUnicodeString(&portName, CRYPTOSHIELD_PORT_NAME);
-        InitializeObjectAttributes(&oa,
-            &portName,
-            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
-            NULL,
-            sd);
-
-        status = FltCreateCommunicationPort(g_Context.FilterHandle,
-            &g_Context.ServerPort,
-            &oa,
-            NULL,  // ServerPortCookie
-            CryptoShieldConnectNotify,
-            CryptoShieldDisconnectNotify,
-            CryptoShieldMessageNotify,
-            MAX_PORT_CONNECTIONS);
-
-        if (!NT_SUCCESS(status)) {
-            CS_ERROR("Failed to create communication port: 0x%08x", status);
-            __leave;
-        }
-
-        // Start filtering
-        status = FltStartFiltering(g_Context.FilterHandle);
-        if (!NT_SUCCESS(status)) {
-            CS_ERROR("Failed to start filtering: 0x%08x", status);
-            __leave;
-        }
-
-        CS_INFO("CryptoShield driver loaded successfully");
-
-    }
-    __finally {
-
-        if (sd != NULL) {
-            FltFreeSecurityDescriptor(sd);
-        }
-
-        if (!NT_SUCCESS(status)) {
-            // Cleanup on failure
-            if (g_Context.ServerPort != NULL) {
-                FltCloseCommunicationPort(g_Context.ServerPort);
-                g_Context.ServerPort = NULL;
-            }
-
-            if (g_Context.FilterHandle != NULL) {
-                FltUnregisterFilter(g_Context.FilterHandle);
-                g_Context.FilterHandle = NULL;
-            }
-
-            ExDeleteResourceLite(&g_Context.PortResource);
-        }
+    // Inicializar objetos de sincronización
+    KeInitializeSpinLock(&g_Context.StatisticsLock);
+    KeInitializeSpinLock(&g_Context.ConfigLock);
+    status = ExInitializeResourceLite(&g_Context.PortResource);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to initialize PortResource: 0x%08X", status);
+        // No hay mucho que limpiar aquí si esto falla al inicio.
+        return status;
     }
 
-    return status;
+    // Establecer configuración por defecto (podría leerse del RegistryPath también)
+    g_Context.MonitoringEnabled = (DEFAULT_MONITORING_ENABLED == TRUE); // Desde Shared.h
+    g_Context.DetectionSensitivity = DEFAULT_DETECTION_SENSITIVITY;   // Desde Shared.h
+    g_Context.ActiveConfigFlags = 0;
+    if (g_Context.MonitoringEnabled) {
+        g_Context.ActiveConfigFlags |= CONFIG_FLAG_MONITORING_ENABLED;
+    }
+    // Inicializar otros flags de configuración y acciones de respuesta si es necesario.
+
+    g_Context.IsUnloading = FALSE;
+    g_Context.ClientConnected = FALSE;
+
+    // Registrar el minifilter con el Filter Manager
+    CS_LOG_TRACE("Registering filter with Filter Manager...");
+    status = FltRegisterFilter(DriverObject, &FilterRegistration, &g_Context.FilterHandle);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to register filter: 0x%08X", status);
+        ExDeleteResourceLite(&g_Context.PortResource); // Limpiar recurso
+        return status;
+    }
+
+    // Crear el puerto de comunicación para el servicio de usuario
+    CS_LOG_TRACE("Creating communication port '%ws'...", CRYPTOSHIELD_PORT_NAME);
+    status = FltBuildDefaultSecurityDescriptor(&sd, FLT_PORT_ALL_ACCESS);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to build security descriptor for port: 0x%08X", status);
+        FltUnregisterFilter(g_Context.FilterHandle); // Limpiar registro del filtro
+        ExDeleteResourceLite(&g_Context.PortResource);
+        return status;
+    }
+
+    RtlInitUnicodeString(&portNameUnicodeString, CRYPTOSHIELD_PORT_NAME);
+    InitializeObjectAttributes(&oa,
+        &portNameUnicodeString,
+        OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, // Atributos del objeto
+        NULL,                                     // RootDirectory (NULL para nombres globales)
+        sd);                                      // SecurityDescriptor
+
+    status = FltCreateCommunicationPort(
+        g_Context.FilterHandle,
+        &g_Context.ServerPort,      // Recibe el handle del puerto del servidor
+        &oa,                        // Atributos del objeto para el puerto
+        NULL,                       // ServerPortCookie (contexto para este puerto, no para conexiones)
+        ConnectNotifyCallback,      // Callback para nuevas conexiones de clientes
+        DisconnectNotifyCallback,   // Callback para desconexiones de clientes
+        MessageNotifyCallback,      // Callback para mensajes de clientes
+        MAX_CLIENT_CONNECTIONS);    // Número máximo de clientes simultáneos
+
+    FltFreeSecurityDescriptor(sd); // Liberar el descriptor de seguridad, ya no se necesita
+    sd = NULL;
+
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to create communication port: 0x%08X", status);
+        FltUnregisterFilter(g_Context.FilterHandle);
+        ExDeleteResourceLite(&g_Context.PortResource);
+        return status;
+    }
+
+    // Iniciar el filtrado de I/O
+    CS_LOG_TRACE("Starting filtering...");
+    status = FltStartFiltering(g_Context.FilterHandle);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to start filtering: 0x%08X", status);
+        FltCloseCommunicationPort(g_Context.ServerPort); // Cerrar puerto
+        g_Context.ServerPort = NULL;
+        FltUnregisterFilter(g_Context.FilterHandle);
+        g_Context.FilterHandle = NULL;
+        ExDeleteResourceLite(&g_Context.PortResource);
+        return status;
+    }
+
+    CS_LOG_INFO("CryptoShield driver loaded successfully.");
+    return STATUS_SUCCESS;
 }
 
+
+// ----- Filter Unload Callback -----
 /**
- * @brief Filter unload routine
+ * @brief Filter unload routine (nombre del doc. técnico: FilterUnloadCallback)
  * @details Cleans up resources and unregisters the filter
- *
- * @param Flags Unload flags
- * @return STATUS_SUCCESS on success, STATUS_FLT_DO_NOT_DETACH if unsafe
  */
-NTSTATUS CryptoShieldUnload(
+NTSTATUS FilterUnloadCallback(
     _In_ FLT_FILTER_UNLOAD_FLAGS Flags
 )
 {
     UNREFERENCED_PARAMETER(Flags);
+    PAGED_CODE(); // Esta rutina debe ser paginable
 
-    CS_INFO("CryptoShield driver unloading");
+    CS_LOG_INFO("CryptoShield driver unloading...");
 
-    // Set unloading flag
+    // Indicar que el driver se está descargando para detener nuevas operaciones/mensajes.
     InterlockedExchange8((CHAR*)&g_Context.IsUnloading, TRUE);
 
-    // Close communication port
+    // Cerrar el puerto de comunicación del servidor.
+    // Esto evitará nuevas conexiones y debería hacer que FltSendMessage falle para los clientes.
     if (g_Context.ServerPort != NULL) {
+        CS_LOG_TRACE("Closing communication server port...");
         FltCloseCommunicationPort(g_Context.ServerPort);
-        g_Context.ServerPort = NULL;
+        g_Context.ServerPort = NULL; // Marcar como cerrado
     }
 
-    // Wait for any pending operations
-    // In a production driver, we would implement proper synchronization here
+    // En un driver de producción, se necesitaría esperar a que se completen
+    // las operaciones pendientes o los hilos de mensajes.
+    // Aquí, se asume que DisconnectNotifyCallback limpiará g_Context.ClientPort.
+    // Se podría añadir una espera activa o un evento.
 
-    // Unregister filter
+    // Anular el registro del filtro con el Filter Manager.
+    // Esto detendrá la llegada de nuevos IRPs a los callbacks.
     if (g_Context.FilterHandle != NULL) {
+        CS_LOG_TRACE("Unregistering filter...");
         FltUnregisterFilter(g_Context.FilterHandle);
-        g_Context.FilterHandle = NULL;
+        g_Context.FilterHandle = NULL; // Marcar como no registrado
     }
 
-    // Cleanup synchronization objects
-    ExDeleteResourceLite(&g_Context.PortResource);
+    // Limpiar objetos de sincronización.
+    // ExDeleteResourceLite debe llamarse solo si ExInitializeResourceLite tuvo éxito.
+    CS_LOG_TRACE("Deleting port resource...");
+    ExDeleteResourceLite(&g_Context.PortResource); // Asumiendo que siempre se inicializó si llegamos aquí.
 
-    CS_INFO("CryptoShield driver unloaded successfully");
-    CS_INFO("Total file operations monitored: %d", g_Context.FileOperationCount);
-    CS_INFO("Total messages sent: %d", g_Context.MessagesSent);
+    CS_LOG_INFO("CryptoShield driver unloaded successfully.");
+    CS_LOG_INFO("Total file operations monitored: %lld", g_Context.FileOperationsMonitored);
+    CS_LOG_INFO("Total messages sent to user mode: %lld", g_Context.MessagesSentToUserMode);
+    CS_LOG_INFO("Total messages received from user mode: %lld", g_Context.MessagesReceivedFromUserMode);
 
     return STATUS_SUCCESS;
 }
 
-/**
- * @brief Pre-operation callback
- * @details Called before an I/O operation is passed to the file system
- *
- * @param Data Callback data with operation information
- * @param FltObjects Filter objects for this operation
- * @param CompletionContext Context to pass to post-operation callback
- * @return FLT_PREOP_SUCCESS_WITH_CALLBACK to continue with post-operation
- */
-FLT_PREOP_CALLBACK_STATUS CryptoShieldPreOperation(
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
-)
-{
-    NTSTATUS status;
-    ULONG operationType = 0;
-
-    UNREFERENCED_PARAMETER(FltObjects);
-    UNREFERENCED_PARAMETER(CompletionContext);
-
-    // Check if we're unloading
-    if (g_Context.IsUnloading) {
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    // Check if monitoring is enabled
-    if (!g_Context.MonitoringEnabled) {
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    // Skip kernel requests
-    if (Data->Iopb->OperationFlags & SL_OPEN_PAGING_FILE) {
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    // Determine operation type
-    switch (Data->Iopb->MajorFunction) {
-    case IRP_MJ_CREATE:
-        operationType = FILE_OP_CREATE;
-        break;
-    case IRP_MJ_WRITE:
-        operationType = FILE_OP_WRITE;
-        break;
-    case IRP_MJ_SET_INFORMATION:
-        if (Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FileDispositionInformation ||
-            Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FileDispositionInformationEx) {
-            operationType = FILE_OP_DELETE;
-        }
-        else if (Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FileRenameInformation ||
-            Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FileRenameInformationEx) {
-            operationType = FILE_OP_RENAME;
-        }
-        else {
-            operationType = FILE_OP_SET_INFORMATION;
-        }
-        break;
-    case IRP_MJ_CLEANUP:
-        // We monitor cleanup but don't send messages for it
-        InterlockedIncrement(&g_Context.FileOperationCount);
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    default:
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    // Update statistics
-    InterlockedIncrement(&g_Context.FileOperationCount);
-
-    // Send message to user mode if client is connected
-    if (g_Context.ClientConnected) {
-        status = SendFileOperationMessage(Data, operationType);
-        if (!NT_SUCCESS(status)) {
-            CS_WARNING("Failed to send file operation message: 0x%08x", status);
-        }
-    }
-
-    // For now, we always allow operations
-    // In later tasks, we'll implement blocking based on detection
-    return FLT_PREOP_SUCCESS_WITH_CALLBACK;
-}
-
-/**
- * @brief Post-operation callback
- * @details Called after an I/O operation completes
- *
- * @param Data Callback data with operation information
- * @param FltObjects Filter objects for this operation
- * @param CompletionContext Context from pre-operation callback
- * @param Flags Post-operation flags
- * @return FLT_POSTOP_FINISHED_PROCESSING
- */
-FLT_POSTOP_CALLBACK_STATUS CryptoShieldPostOperation(
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_opt_ PVOID CompletionContext,
-    _In_ FLT_POST_OPERATION_FLAGS Flags
-)
-{
-    UNREFERENCED_PARAMETER(Data);
-    UNREFERENCED_PARAMETER(FltObjects);
-    UNREFERENCED_PARAMETER(CompletionContext);
-    UNREFERENCED_PARAMETER(Flags);
-
-    // In this basic implementation, we don't do anything in post-operation
-    // Later tasks will add analysis here
-
-    return FLT_POSTOP_FINISHED_PROCESSING;
-}
+// ----- Instance Setup/Teardown Callbacks -----
+// (Implementados en este archivo por simplicidad, podrían estar en otro si crecen mucho)
 
 /**
  * @brief Instance setup callback
  * @details Called when filter attaches to a volume
- *
- * @param FltObjects Filter objects for this instance
- * @param Flags Setup flags
- * @param VolumeDeviceType Type of volume device
- * @param VolumeFilesystemType Type of file system
- * @return STATUS_SUCCESS to attach, STATUS_FLT_DO_NOT_ATTACH to skip
  */
-NTSTATUS CryptoShieldInstanceSetup(
+NTSTATUS InstanceSetupCallback(
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_SETUP_FLAGS Flags,
     _In_ DEVICE_TYPE VolumeDeviceType,
     _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
 )
 {
-    UNREFERENCED_PARAMETER(FltObjects);
-    UNREFERENCED_PARAMETER(Flags);
+    PAGED_CODE();
+    UNREFERENCED_PARAMETER(FltObjects); // Usar si se necesita info del volumen/instancia
+    UNREFERENCED_PARAMETER(Flags);      // Usar para FLTFL_INSTANCE_SETUP_FLAGS
 
-    CS_INFO("Instance setup for volume type %d, filesystem %d",
+    CS_LOG_TRACE("InstanceSetupCallback entered for volume type %u, filesystem type %u.",
         VolumeDeviceType, VolumeFilesystemType);
 
-    // We only attach to disk file systems
+    // Decidir si adjuntar a este volumen.
+    // Por ejemplo, solo adjuntar a sistemas de archivos de disco y NTFS/ReFS.
     if (VolumeDeviceType != FILE_DEVICE_DISK_FILE_SYSTEM) {
-        CS_INFO("Skipping non-disk volume");
+        CS_LOG_INFO("Skipping attachment to non-disk volume type %u.", VolumeDeviceType);
         return STATUS_FLT_DO_NOT_ATTACH;
     }
 
-    // Skip read-only volumes
-    if (FlagOn(Flags, FLTFL_INSTANCE_SETUP_NEWLY_MOUNTED_VOLUME) &&
-        FltObjects->Volume != NULL) {
-        // Would check volume properties here in production
+    if (!IsFileSystemSupported(VolumeFilesystemType)) {
+        CS_LOG_INFO("Skipping attachment to unsupported filesystem type %u.", VolumeFilesystemType);
+        return STATUS_FLT_DO_NOT_ATTACH;
     }
 
-    CS_INFO("Attaching to volume");
-    return STATUS_SUCCESS;
+    // Podrían hacerse más comprobaciones aquí:
+    // - Volumen de solo lectura.
+    // - Volumen de sistema (si no se quiere monitorizar).
+    // - Tipo de dispositivo específico.
+
+    CS_LOG_INFO("Attaching to volume (FS type %u).", VolumeFilesystemType);
+    return STATUS_SUCCESS; // Adjuntar a este volumen
 }
 
 /**
  * @brief Instance query teardown callback
  * @details Called when filter is about to detach from a volume
- *
- * @param FltObjects Filter objects for this instance
- * @param Flags Query teardown flags
- * @return STATUS_SUCCESS to allow detach
  */
-NTSTATUS CryptoShieldInstanceQueryTeardown(
+NTSTATUS InstanceQueryTeardownCallback(
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
 )
 {
+    PAGED_CODE();
     UNREFERENCED_PARAMETER(FltObjects);
-    UNREFERENCED_PARAMETER(Flags);
+    UNREFERENCED_PARAMETER(Flags); // Flags como FLTFL_INSTANCE_QUERY_TEARDOWN_VOLUNTARY_DETACHMENT
 
-    CS_INFO("Instance query teardown");
+    CS_LOG_TRACE("InstanceQueryTeardownCallback entered.");
 
-    // Always allow detach in this basic implementation
-    return STATUS_SUCCESS;
+    // En una implementación básica, siempre se permite el detach.
+    // En casos más complejos, se podría querer impedir el detach si hay operaciones críticas pendientes.
+    // Si el driver se está descargando (g_Context.IsUnloading es TRUE), permitir siempre.
+    if (g_Context.IsUnloading) {
+        return STATUS_SUCCESS;
+    }
+
+    // Lógica para decidir si permitir el detach o no (STATUS_FLT_DO_NOT_DETACH).
+    // Por ejemplo, si hay un análisis en curso en este volumen que no puede interrumpirse.
+
+    return STATUS_SUCCESS; // Permitir el detach
 }

@@ -8,190 +8,190 @@
 
 #pragma once
 
+ // <<<--- AÑADIR ESTAS LÍNEAS ---<<<
+#ifndef _CRYPTOSHIELD_H_
+#define _CRYPTOSHIELD_H_
+// --- FIN DE LÍNEAS A AÑADIR ---<<<
+
 #include <fltKernel.h>
 #include <dontuse.h>
 #include <suppress.h>
+#include <ntstrsafe.h>    // Para RtlStringCchPrintfW y similares
+#include "Shared.h"       // Incluir las definiciones compartidas
 
- // Driver identification
-#define CRYPTOSHIELD_DRIVER_NAME     L"CryptoShield"
-#define CRYPTOSHIELD_DRIVER_VERSION  L"1.0.0"
-#define CRYPTOSHIELD_POOL_TAG        'dShC'  // 'CShd' in reverse
+ // Driver identification (podrían ir en Shared.h si el servicio también necesita el nombre exacto)
+#define CRYPTOSHIELD_DRIVER_NAME_INTERNAL L"CryptoShield" // Nombre para logs, etc.
+#define CRYPTOSHIELD_POOL_TAG             'SdSC'  // "CSdS" CryptoShield Driver Stack
 
-// Communication port
-#define CRYPTOSHIELD_PORT_NAME       L"\\CryptoShieldPort"
-#define MAX_PORT_CONNECTIONS         1
+// Communication port settings (MAX_PORT_CONNECTIONS ya está en Shared.h si se quiere)
+#define MAX_CLIENT_CONNECTIONS      1 // Número máximo de servicios de usuario conectados
 
-// Configuration defaults
-#define DEFAULT_MONITORING_ENABLED   TRUE
-#define DEFAULT_DETECTION_SENSITIVITY 50
-#define MAX_FILE_PATH_LENGTH         520  // MAX_PATH * 2 for Unicode
+// Configuration defaults (DEFAULT_MONITORING_ENABLED, DEFAULT_DETECTION_SENSITIVITY ya en Shared.h)
 
-// Message types for kernel-user communication
-#define MSG_FILE_OPERATION          1
-#define MSG_STATUS_REQUEST          2
-#define MSG_CONFIG_UPDATE           3
-#define MSG_SHUTDOWN_REQUEST        4
-
-// File operation types
-#define FILE_OP_CREATE              1
-#define FILE_OP_WRITE               2
-#define FILE_OP_DELETE              3
-#define FILE_OP_RENAME              4
-#define FILE_OP_SET_INFORMATION     5
-
-// Driver context structure
+// Driver context structure (del documento técnico, ajustado)
 typedef struct _CRYPTOSHIELD_CONTEXT {
-    PFLT_FILTER FilterHandle;
-    PFLT_PORT ServerPort;
-    PFLT_PORT ClientPort;
+    PFLT_FILTER FilterHandle;       // Handle del filtro obtenido de FltRegisterFilter
+    PFLT_PORT ServerPort;           // Puerto del servidor para escuchar conexiones del user-mode
+    PFLT_PORT ClientPort;           // Puerto del cliente conectado (solo 1 según MAX_CLIENT_CONNECTIONS)
 
-    // Configuration
-    BOOLEAN MonitoringEnabled;
-    ULONG DetectionSensitivity;
+    // Configuración (cargada o por defecto, modificable por el servicio)
+    BOOLEAN MonitoringEnabled;      // Habilita/deshabilita el monitoreo de archivos
+    ULONG DetectionSensitivity;     // Nivel de sensibilidad para la detección (0-100)
+    ULONG ActiveConfigFlags;        // Flags de CONFIG_FLAG_* actualmente activos
+    ULONG ActiveResponseActions;    // Acciones ACTION_* actualmente activas para amenazas
 
-    // Statistics
-    volatile LONG FileOperationCount;
-    volatile LONG MessagesSent;
-    volatile LONG MessagesReceived;
+    // Estadísticas (contadores volátiles)
+    volatile LONG64 FileOperationsMonitored; // Usar LONG64 para contadores grandes
+    volatile LONG64 MessagesSentToUserMode;
+    volatile LONG64 MessagesReceivedFromUserMode;
+    volatile LONG64 OperationsBlockedByDriver;
+    volatile LONG64 ThreatsDetectedByDriver;
+    // Añadir más según sea necesario
 
-    // Synchronization
-    KSPIN_LOCK StatisticsLock;
-    KSPIN_LOCK ConfigLock;
-    ERESOURCE PortResource;
-
-    // Status flags
-    BOOLEAN IsUnloading;
-    BOOLEAN ClientConnected;
-
+    // Sincronización
+    KSPIN_LOCK StatisticsLock;      // Spinlock para proteger el acceso a las estadísticas
+    KSPIN_LOCK ConfigLock;          // Spinlock para proteger el acceso a la configuración
+    ERESOURCE PortResource;         // Recurso para proteger ClientPort y ClientConnected
+    // (ExInitializeResourceLite, ExAcquireResourceExclusiveLite, etc.)
+// Estado
+    BOOLEAN IsUnloading;            // Flag para indicar que el driver se está descargando
+    BOOLEAN ClientConnected;        // Flag para indicar si un cliente de user-mode está conectado
+    LARGE_INTEGER DriverLoadTime;   // Momento en que el driver fue cargado
+    // ULONG MonitoredProcessesCount; // Si se lleva cuenta de procesos específicos
+    // ULONG CurrentMemoryUsageKB;  // Si se monitorea el uso de memoria
 } CRYPTOSHIELD_CONTEXT, * PCRYPTOSHIELD_CONTEXT;
 
 // Global driver context
 extern CRYPTOSHIELD_CONTEXT g_Context;
 
-// Filter message structure for communication
-typedef struct _CRYPTOSHIELD_MESSAGE {
-    FILTER_MESSAGE_HEADER Header;
 
-    // Message data
-    ULONG MessageType;
-    ULONG ProcessId;
-    ULONG ThreadId;
-    LARGE_INTEGER Timestamp;
-    ULONG OperationType;
+// Estructura para el buffer de respuesta que el KERNEL espera del USUARIO
+// cuando se usa FltSendMessage con un ReplyBuffer.
+// El payload es CS_USER_REPLY_PAYLOAD de Shared.h.
+typedef struct _KERNEL_EXPECTED_USER_REPLY {
+    FILTER_REPLY_HEADER FilterReplyHeader; // Encabezado estándar para FltSendMessage
+    CS_USER_REPLY_PAYLOAD UserPayload;     // El payload definido en Shared.h
+} KERNEL_EXPECTED_USER_REPLY, * PKERNEL_EXPECTED_USER_REPLY;
 
-    // File information
-    USHORT FilePathLength;
-    WCHAR FilePath[MAX_FILE_PATH_LENGTH];
 
-} CRYPTOSHIELD_MESSAGE, * PCRYPTOSHIELD_MESSAGE;
+// ----- Function Declarations -----
 
-// Reply message structure
-typedef struct _CRYPTOSHIELD_REPLY {
-    FILTER_REPLY_HEADER Header;
-    NTSTATUS Status;
-    BOOLEAN AllowOperation;
-} CRYPTOSHIELD_REPLY, * PCRYPTOSHIELD_REPLY;
-
-// Function declarations - DriverEntry and Unload
+// Driver Entry and Unload (nombres según documento técnico y convenciones)
 DRIVER_INITIALIZE DriverEntry;
-NTSTATUS DriverEntry(
-    _In_ PDRIVER_OBJECT DriverObject,
-    _In_ PUNICODE_STRING RegistryPath
-);
-
-NTSTATUS CryptoShieldUnload(
+NTSTATUS FilterUnloadCallback( // Cambiado de CryptoShieldUnload
     _In_ FLT_FILTER_UNLOAD_FLAGS Flags
 );
 
-// Pre/Post operation callbacks
-FLT_PREOP_CALLBACK_STATUS CryptoShieldPreOperation(
+// Minifilter Operation Callbacks (nombres según documento técnico)
+FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
 );
 
-FLT_POSTOP_CALLBACK_STATUS CryptoShieldPostOperation(
+FLT_POSTOP_CALLBACK_STATUS PostOperationCallback(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_opt_ PVOID CompletionContext,
     _In_ FLT_POST_OPERATION_FLAGS Flags
 );
 
-// Instance setup/teardown callbacks
-NTSTATUS CryptoShieldInstanceSetup(
+// Minifilter Instance Setup/Teardown Callbacks
+NTSTATUS InstanceSetupCallback( // Nombre genérico más descriptivo
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_SETUP_FLAGS Flags,
     _In_ DEVICE_TYPE VolumeDeviceType,
     _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
 );
 
-NTSTATUS CryptoShieldInstanceQueryTeardown(
+NTSTATUS InstanceQueryTeardownCallback( // Nombre genérico
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
 );
+// NTSTATUS InstanceTeardownStartCallback(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_TEARDOWN_FLAGS Flags);
+// NTSTATUS InstanceTeardownCompleteCallback(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_TEARDOWN_FLAGS Flags);
 
-// Communication callbacks
-NTSTATUS CryptoShieldConnectNotify(
+
+// Communication Port Callbacks (nombres según documento técnico)
+NTSTATUS ConnectNotifyCallback(
     _In_ PFLT_PORT ClientPort,
     _In_opt_ PVOID ServerPortCookie,
-    _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext,
+    _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext, // Contexto enviado por el cliente al conectar
     _In_ ULONG SizeOfContext,
-    _Flt_ConnectionCookie_Outptr_ PVOID* ConnectionCookie
+    _Flt_ConnectionCookie_Outptr_ PVOID* ConnectionCookie // Cookie para esta conexión específica
 );
 
-VOID CryptoShieldDisconnectNotify(
-    _In_opt_ PVOID ConnectionCookie
+VOID DisconnectNotifyCallback(
+    _In_opt_ PVOID ConnectionCookie // El cookie devuelto por ConnectNotifyCallback
 );
 
-NTSTATUS CryptoShieldMessageNotify(
-    _In_opt_ PVOID PortCookie,
-    _In_reads_bytes_opt_(InputBufferLength) PVOID InputBuffer,
+NTSTATUS MessageNotifyCallback(
+    _In_opt_ PVOID PortCookie, // ServerPortCookie (NULL en este caso) o ConnectionCookie si se configuró
+    _In_reads_bytes_opt_(InputBufferLength) PVOID InputBuffer, // Mensaje del cliente
     _In_ ULONG InputBufferLength,
-    _Out_writes_bytes_to_opt_(OutputBufferLength, *ReturnOutputBufferLength) PVOID OutputBuffer,
+    _Out_writes_bytes_to_opt_(OutputBufferLength, *ReturnOutputBufferLength) PVOID OutputBuffer, // Buffer para la respuesta al cliente
     _In_ ULONG OutputBufferLength,
     _Out_ PULONG ReturnOutputBufferLength
 );
 
-// Utility functions
-NTSTATUS SendFileOperationMessage(
+
+// ----- Funciones Internas / de Utilidad del Driver -----
+
+// Funciones de Comunicación (Communication.c)
+NTSTATUS SendMessageToUserService(
+    _In_ PCS_MESSAGE_PAYLOAD_HEADER PayloadHeader, // Puntero al inicio del payload a enviar (debe ser un tipo de Shared.h)
+    _In_ ULONG PayloadSize,                        // Tamaño del payload
+    _Out_opt_ PVOID ReplyBuffer,                   // Buffer para la respuesta del servicio (si se espera)
+    _Inout_opt_ PULONG ReplyLength                 // Tamaño del buffer de respuesta / tamaño devuelto
+);
+
+// Funciones de Monitoreo de Archivos (FileMonitor.c)
+NTSTATUS GetNormalizedFileNameInformation( // Renombrado de GetFileNameInformation
     _In_ PFLT_CALLBACK_DATA Data,
-    _In_ ULONG OperationType
+    _Outptr_ PFLT_FILE_NAME_INFORMATION* FileNameInfo // Devuelve la estructura para ser liberada por el llamador
 );
 
-NTSTATUS GetFileNameInformation(
-    _In_ PFLT_CALLBACK_DATA Data,
-    _Out_writes_bytes_(FileNameBufferSize) PWCHAR FileNameBuffer,
-    _In_ ULONG FileNameBufferSize,
-    _Out_ PULONG ReturnedLength
+// Funciones de Utilidad (Utilities.c)
+BOOLEAN IsFileSystemSupported(
+    _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
 );
 
-VOID UpdateStatistics(
-    _In_ ULONG StatType
+BOOLEAN ShouldMonitorFileByPath( // Renombrado de ShouldMonitorFile
+    _In_ PFLT_FILE_NAME_INFORMATION FileNameInfo
 );
 
-// Debug/Logging macros
+// Prototipos para funciones de Utilities.c que se usan internamente en el driver si son necesarias en varios .c
+// NTSTATUS DuplicateUnicodeString_Kernel(PUNICODE_STRING Dest, PCUNICODE_STRING Source, POOL_TYPE PoolType, ULONG Tag);
+// VOID FreeUnicodeString_Kernel(PUNICODE_STRING String, ULONG Tag);
+// ... etc. (FltFindUnicodeString ya está en Shared.h o aquí si es solo kernel)
+
+
+// ----- Macros de Ayuda del Driver -----
+
+// Debug/Logging (ya definidos en el código original)
 #if DBG
 #define CS_DBG_PRINT(Level, Fmt, ...) \
-    DbgPrintEx(DPFLTR_IHVDRIVER_ID, Level, "[CryptoShield] " Fmt "\n", __VA_ARGS__)
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, Level, "[CryptoShield] (%s:%d) " Fmt "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
 #else
 #define CS_DBG_PRINT(Level, Fmt, ...)
 #endif
 
-#define CS_ERROR(Fmt, ...)   CS_DBG_PRINT(DPFLTR_ERROR_LEVEL, Fmt, __VA_ARGS__)
-#define CS_WARNING(Fmt, ...) CS_DBG_PRINT(DPFLTR_WARNING_LEVEL, Fmt, __VA_ARGS__)
-#define CS_INFO(Fmt, ...)    CS_DBG_PRINT(DPFLTR_INFO_LEVEL, Fmt, __VA_ARGS__)
-#define CS_TRACE(Fmt, ...)   CS_DBG_PRINT(DPFLTR_TRACE_LEVEL, Fmt, __VA_ARGS__)
+#define CS_LOG_ERROR(Fmt, ...)   CS_DBG_PRINT(DPFLTR_ERROR_LEVEL, Fmt, __VA_ARGS__)
+#define CS_LOG_WARNING(Fmt, ...) CS_DBG_PRINT(DPFLTR_WARNING_LEVEL, Fmt, __VA_ARGS__)
+#define CS_LOG_INFO(Fmt, ...)    CS_DBG_PRINT(DPFLTR_INFO_LEVEL, Fmt, __VA_ARGS__)
+#define CS_LOG_TRACE(Fmt, ...)   CS_DBG_PRINT(DPFLTR_TRACE_LEVEL, Fmt, __VA_ARGS__)
 
-// Memory allocation helpers
-#define CS_ALLOC_POOL(Size) \
-    ExAllocatePoolWithTag(NonPagedPool, Size, CRYPTOSHIELD_POOL_TAG)
+
+// Memory Allocation (usando el tag definido arriba)
+#define CS_ALLOCATE_POOL(PoolFlags, Size) \
+    ExAllocatePool2(PoolFlags, Size, CRYPTOSHIELD_POOL_TAG)
 
 #define CS_FREE_POOL(Buffer) \
-    ExFreePoolWithTag(Buffer, CRYPTOSHIELD_POOL_TAG)
+    ExFreePoolWithTag(Buffer, CRYPTOSHIELD_POOL_TAG) // ExFreePool no necesita tag, pero ExFreePoolWithTag es más explícito si se mantiene el tag
 
-// IRQL verification helpers
-#define CS_VERIFY_IRQL_PASSIVE() \
-    NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL)
+// IRQL Verification
+#define CS_ASSERT_IRQL_PASSIVE() NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL)
+#define CS_ASSERT_IRQL_DISPATCH_LEVEL_OR_BELOW() NT_ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL)
+// Añadir más según sea necesario
 
-#define CS_VERIFY_IRQL_APC_OR_BELOW() \
-    NT_ASSERT(KeGetCurrentIrql() <= APC_LEVEL)
+#endif // _CRYPTOSHIELD_H_

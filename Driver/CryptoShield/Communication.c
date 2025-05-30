@@ -1,123 +1,112 @@
 /**
  * @file Communication.c
  * @brief Kernel-User communication implementation
- * @details Handles communication port callbacks and message processing
+ * @details Handles communication port callbacks and message processing for CryptoShield.
  *
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
-#include "CryptoShield.h"
+#include "CryptoShield.h" // Incluye Shared.h
 
- /**
-  * @brief Client connection notification callback
-  * @details Called when a user-mode client connects to the communication port
-  *
-  * @param ClientPort Client port handle
-  * @param ServerPortCookie Server port context
-  * @param ConnectionContext Connection context from client
-  * @param SizeOfContext Size of connection context
-  * @param ConnectionCookie Output connection identifier
-  * @return STATUS_SUCCESS to accept connection, error code to reject
-  */
-NTSTATUS CryptoShieldConnectNotify(
+ // ----- Forward Declarations (para funciones internas de este archivo si se usan antes de definirlas) -----
+static NTSTATUS HandleStatusRequestMessage(
+    _Out_writes_bytes_to_(OutputBufferLength, *ActualOutputLength) PVOID OutputBuffer,
+    _In_ ULONG OutputBufferLength,
+    _Out_ PULONG ActualOutputLength
+);
+
+static NTSTATUS HandleConfigUpdateMessage(
+    _In_ PCS_CONFIG_UPDATE_PAYLOAD ConfigUpdatePayload, // De Shared.h
+    _In_ ULONG PayloadLength
+);
+
+static NTSTATUS HandleShutdownRequestMessage(VOID);
+
+
+// ----- Communication Port Callbacks (nombres según documento técnico) -----
+
+/**
+ * @brief Client connection notification callback (ConnectNotifyCallback)
+ * @details Called when a user-mode client connects to the communication port.
+ */
+NTSTATUS ConnectNotifyCallback(
     _In_ PFLT_PORT ClientPort,
-    _In_opt_ PVOID ServerPortCookie,
-    _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext,
+    _In_opt_ PVOID ServerPortCookie, // No usado en esta implementación
+    _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext, // Contexto del cliente
     _In_ ULONG SizeOfContext,
-    _Flt_ConnectionCookie_Outptr_ PVOID* ConnectionCookie
+    _Flt_ConnectionCookie_Outptr_ PVOID* ConnectionCookie // Cookie para esta conexión
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    PAGED_CODE(); // Esta callback se llama en PASSIVE_LEVEL.
 
     UNREFERENCED_PARAMETER(ServerPortCookie);
-    UNREFERENCED_PARAMETER(ConnectionContext);
+    UNREFERENCED_PARAMETER(ConnectionContext); // Podría usarse para validar versión del cliente, etc.
     UNREFERENCED_PARAMETER(SizeOfContext);
 
-    CS_INFO("Client connection request received");
+    CS_LOG_INFO("User service connection request received.");
 
-    // Acquire exclusive access to port
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&g_Context.PortResource, TRUE);
+    // Solo se permite un cliente a la vez (según MAX_CLIENT_CONNECTIONS = 1 en DriverEntry)
+    // Usar el recurso para proteger el acceso a g_Context.ClientPort y g_Context.ClientConnected
+    ExEnterCriticalRegionAndAcquireResourceExclusive(&g_Context.PortResource);
 
-    __try {
-        // Check if we already have a client connected
-        if (g_Context.ClientConnected) {
-            CS_WARNING("Client already connected, rejecting new connection");
-            status = STATUS_ALREADY_REGISTERED;
-            __leave;
-        }
-
-        // Validate client port
-        if (ClientPort == NULL) {
-            CS_ERROR("Invalid client port");
-            status = STATUS_INVALID_PARAMETER;
-            __leave;
-        }
-
-        // Store client port handle
-        g_Context.ClientPort = ClientPort;
-
-        // Set connection cookie (we use a simple pointer to our context)
-        *ConnectionCookie = (PVOID)&g_Context;
-
-        // Mark client as connected
-        InterlockedExchange8((CHAR*)&g_Context.ClientConnected, TRUE);
-
-        CS_INFO("Client connected successfully");
-
-    }
-    __finally {
-        ExReleaseResourceLite(&g_Context.PortResource);
-        KeLeaveCriticalRegion();
+    if (g_Context.ClientConnected) {
+        ExReleaseResourceAndLeaveCriticalRegion(&g_Context.PortResource);
+        CS_LOG_WARNING("A client is already connected. Rejecting new connection.");
+        return STATUS_TOO_MANY_SESSIONS; // O STATUS_ALREADY_REGISTERED
     }
 
-    return status;
+    // Guardar el puerto del cliente y marcar como conectado.
+    g_Context.ClientPort = ClientPort;
+    g_Context.ClientConnected = TRUE;
+
+    // El ConnectionCookie puede ser un puntero a una estructura de contexto de conexión si se necesita.
+    // Por ahora, podemos usar un valor simple o incluso el mismo ClientPort si no se necesita más.
+    // Aquí, no asignaremos un cookie complejo, el driver solo soporta un cliente.
+    // Se podría usar ClientPort como cookie si FltMgr lo permite o un puntero a g_Context.
+    *ConnectionCookie = (PVOID)ClientPort; // Ejemplo: usar el handle del puerto como cookie.
+
+    ExReleaseResourceAndLeaveCriticalRegion(&g_Context.PortResource);
+
+    CS_LOG_INFO("User service connected successfully. ClientPort: 0x%p", ClientPort);
+    return STATUS_SUCCESS;
 }
 
 /**
- * @brief Client disconnection notification callback
- * @details Called when a user-mode client disconnects from the communication port
- *
- * @param ConnectionCookie Connection identifier from connect callback
+ * @brief Client disconnection notification callback (DisconnectNotifyCallback)
+ * @details Called when a user-mode client disconnects from the communication port.
  */
-VOID CryptoShieldDisconnectNotify(
-    _In_opt_ PVOID ConnectionCookie
+VOID DisconnectNotifyCallback(
+    _In_opt_ PVOID ConnectionCookie // El cookie devuelto por ConnectNotifyCallback
 )
 {
-    UNREFERENCED_PARAMETER(ConnectionCookie);
+    PAGED_CODE(); // Esta callback se llama en PASSIVE_LEVEL.
 
-    CS_INFO("Client disconnecting");
+    CS_LOG_INFO("User service disconnecting. ConnectionCookie: 0x%p", ConnectionCookie);
 
-    // Acquire exclusive access to port
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&g_Context.PortResource, TRUE);
+    ExEnterCriticalRegionAndAcquireResourceExclusive(&g_Context.PortResource);
 
-    // Mark client as disconnected
-    InterlockedExchange8((CHAR*)&g_Context.ClientConnected, FALSE);
+    // Verificar si el cookie de conexión coincide con el cliente actual (si se usara un cookie más complejo).
+    // En este caso, como solo hay un cliente, si g_Context.ClientConnected es TRUE, es este.
+    if (g_Context.ClientConnected && (PFLT_PORT)ConnectionCookie == g_Context.ClientPort) {
+        g_Context.ClientConnected = FALSE;
+        g_Context.ClientPort = NULL; // Liberar la referencia al puerto del cliente.
+        // FltCloseClientPort no se llama aquí; el Filter Manager lo maneja.
+        CS_LOG_INFO("User service disconnected successfully.");
+    }
+    else {
+        CS_LOG_WARNING("DisconnectNotifyCallback received for an unknown or already disconnected client. Cookie: 0x%p, CurrentClientPort: 0x%p",
+            ConnectionCookie, g_Context.ClientPort);
+    }
 
-    // Clear client port
-    g_Context.ClientPort = NULL;
-
-    ExReleaseResourceLite(&g_Context.PortResource);
-    KeLeaveCriticalRegion();
-
-    CS_INFO("Client disconnected");
+    ExReleaseResourceAndLeaveCriticalRegion(&g_Context.PortResource);
 }
 
 /**
- * @brief Message notification callback
- * @details Processes messages received from user-mode client
- *
- * @param PortCookie Port context
- * @param InputBuffer Input message buffer
- * @param InputBufferLength Input buffer size
- * @param OutputBuffer Output buffer for reply
- * @param OutputBufferLength Output buffer size
- * @param ReturnOutputBufferLength Actual output size
- * @return STATUS_SUCCESS on success, appropriate error code on failure
+ * @brief Message notification callback (MessageNotifyCallback)
+ * @details Processes messages received from the user-mode client.
  */
-NTSTATUS CryptoShieldMessageNotify(
-    _In_opt_ PVOID PortCookie,
+NTSTATUS MessageNotifyCallback(
+    _In_opt_ PVOID PortCookie, // El ConnectionCookie de la conexión
     _In_reads_bytes_opt_(InputBufferLength) PVOID InputBuffer,
     _In_ ULONG InputBufferLength,
     _Out_writes_bytes_to_opt_(OutputBufferLength, *ReturnOutputBufferLength) PVOID OutputBuffer,
@@ -126,254 +115,300 @@ NTSTATUS CryptoShieldMessageNotify(
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
-    PCRYPTOSHIELD_MESSAGE message = NULL;
-    ULONG messageType = 0;
+    PCS_MESSAGE_PAYLOAD_HEADER payloadHeader = NULL; // De Shared.h
 
-    UNREFERENCED_PARAMETER(PortCookie);
+    UNREFERENCED_PARAMETER(PortCookie); // Podría usarse para identificar al cliente si hay múltiples.
 
-    // Initialize output
-    *ReturnOutputBufferLength = 0;
+    PAGED_CODE(); // Esta callback se llama en el contexto del hilo del cliente, en PASSIVE_LEVEL.
 
-    // Validate input parameters
-    if (InputBuffer == NULL || InputBufferLength < sizeof(ULONG)) {
-        CS_ERROR("Invalid input buffer");
+    *ReturnOutputBufferLength = 0; // Inicializar
+
+    if (g_Context.IsUnloading) {
+        CS_LOG_WARNING("Message received while driver is unloading. Ignoring.");
+        return STATUS_SHUTDOWN_IN_PROGRESS;
+    }
+
+    // Validar el buffer de entrada. Debe contener al menos la cabecera del payload.
+    if (InputBuffer == NULL || InputBufferLength < sizeof(CS_MESSAGE_PAYLOAD_HEADER)) {
+        CS_LOG_ERROR("Invalid input buffer (NULL or too small for header). Length: %u", InputBufferLength);
         return STATUS_INVALID_PARAMETER;
     }
 
-    // Cast input buffer to message structure
-    message = (PCRYPTOSHIELD_MESSAGE)InputBuffer;
+    payloadHeader = (PCS_MESSAGE_PAYLOAD_HEADER)InputBuffer;
 
-    // Validate message size
-    if (InputBufferLength < FIELD_OFFSET(CRYPTOSHIELD_MESSAGE, FilePath)) {
-        CS_ERROR("Input buffer too small");
-        return STATUS_BUFFER_TOO_SMALL;
+    // Validar que el tamaño del buffer de entrada coincida con el tamaño indicado en el payload.
+    if (InputBufferLength < payloadHeader->PayloadSize) {
+        CS_LOG_ERROR("InputBufferLength (%u) is less than PayloadSize in header (%u).",
+            InputBufferLength, payloadHeader->PayloadSize);
+        return STATUS_BUFFER_TOO_SMALL; // O STATUS_INFO_LENGTH_MISMATCH
     }
+    // También es buena idea limitar el PayloadSize máximo para evitar DoS.
+    // if (payloadHeader->PayloadSize > MAX_EXPECTED_PAYLOAD_SIZE) return STATUS_INVALID_PARAMETER;
 
-    messageType = message->MessageType;
-    CS_TRACE("Received message type: %d", messageType);
 
-    // Update statistics
-    InterlockedIncrement(&g_Context.MessagesReceived);
+    CS_LOG_TRACE("Received message from user service. Type: %u, ID: %u, Size: %u",
+        payloadHeader->MessageType, payloadHeader->MessageId, payloadHeader->PayloadSize);
+    InterlockedIncrement64(&g_Context.MessagesReceivedFromUserMode);
 
-    // Process message based on type
-    switch (messageType) {
-    case MSG_STATUS_REQUEST:
-        status = HandleStatusRequest(OutputBuffer,
-            OutputBufferLength,
-            ReturnOutputBufferLength);
+    // Procesar el mensaje según su tipo (definido en Shared.h)
+    switch (payloadHeader->MessageType) {
+    case MSG_TYPE_STATUS_REQUEST:
+        // El payload de entrada para StatusRequest es solo la cabecera.
+        // La respuesta se escribe en OutputBuffer.
+        status = HandleStatusRequestMessage(OutputBuffer, OutputBufferLength, ReturnOutputBufferLength);
         break;
 
-    case MSG_CONFIG_UPDATE:
-        status = HandleConfigUpdate(message,
-            InputBufferLength);
+    case MSG_TYPE_CONFIG_UPDATE:
+        // Verificar que el payload sea del tamaño esperado para CS_CONFIG_UPDATE_PAYLOAD.
+        if (payloadHeader->PayloadSize < sizeof(CS_CONFIG_UPDATE_PAYLOAD)) {
+            CS_LOG_ERROR("PayloadSize (%u) for MSG_TYPE_CONFIG_UPDATE is too small (expected %u).",
+                payloadHeader->PayloadSize, (ULONG)sizeof(CS_CONFIG_UPDATE_PAYLOAD));
+            status = STATUS_INFO_LENGTH_MISMATCH;
+        }
+        else {
+            status = HandleConfigUpdateMessage(
+                (PCS_CONFIG_UPDATE_PAYLOAD)InputBuffer, // Castear al tipo específico
+                payloadHeader->PayloadSize
+            );
+            // Opcionalmente, enviar una respuesta de confirmación en OutputBuffer.
+            // Por ahora, se asume que la respuesta es solo el NTSTATUS.
+            // Si se envía payload de respuesta, actualizar *ReturnOutputBufferLength.
+        }
         break;
 
-    case MSG_SHUTDOWN_REQUEST:
-        status = HandleShutdownRequest();
+    case MSG_TYPE_SHUTDOWN_REQUEST:
+        // El driver no puede auto-descargarse, pero puede prepararse.
+        status = HandleShutdownRequestMessage();
+        // No se espera payload de respuesta.
         break;
+
+        // Otros tipos de mensajes del cliente al kernel podrían manejarse aquí.
+        // Por ejemplo, si el cliente envía una respuesta a una alerta que el kernel envió.
 
     default:
-        CS_WARNING("Unknown message type: %d", messageType);
-        status = STATUS_INVALID_PARAMETER;
+        CS_LOG_WARNING("Unknown message type received from user service: %u", payloadHeader->MessageType);
+        status = STATUS_INVALID_MESSAGE; // O STATUS_NOT_SUPPORTED
         break;
     }
 
     return status;
 }
 
-/**
- * @brief Handles status request from user mode
- * @details Provides current driver status and statistics
- *
- * @param OutputBuffer Buffer to receive status
- * @param OutputBufferLength Size of output buffer
- * @param ReturnOutputBufferLength Actual size of output
- * @return STATUS_SUCCESS on success
- */
-NTSTATUS HandleStatusRequest(
-    _Out_writes_bytes_to_(OutputBufferLength, *ReturnOutputBufferLength) PVOID OutputBuffer,
+
+// ----- Funciones de Manejo de Mensajes Específicos -----
+
+static NTSTATUS HandleStatusRequestMessage(
+    _Out_writes_bytes_to_(OutputBufferLength, *ActualOutputLength) PVOID OutputBuffer,
     _In_ ULONG OutputBufferLength,
-    _Out_ PULONG ReturnOutputBufferLength
+    _Out_ PULONG ActualOutputLength
 )
 {
-    typedef struct _STATUS_REPLY {
-        BOOLEAN MonitoringEnabled;
-        ULONG DetectionSensitivity;
-        ULONG FileOperationCount;
-        ULONG MessagesSent;
-        ULONG MessagesReceived;
-    } STATUS_REPLY, * PSTATUS_REPLY;
+    PCS_STATUS_REPLY_PAYLOAD statusReply; // De Shared.h
+    KIRQL oldIrqlCfg, oldIrqlStats;
 
-    PSTATUS_REPLY reply = NULL;
-    KIRQL oldIrql;
+    PAGED_CODE();
 
-    // Check buffer size
-    if (OutputBufferLength < sizeof(STATUS_REPLY)) {
+    if (OutputBuffer == NULL || OutputBufferLength < sizeof(CS_STATUS_REPLY_PAYLOAD)) {
+        CS_LOG_ERROR("Output buffer too small for status reply. Needed: %u, Available: %u",
+            (ULONG)sizeof(CS_STATUS_REPLY_PAYLOAD), OutputBufferLength);
+        *ActualOutputLength = 0; // Indicar que no se escribió nada.
         return STATUS_BUFFER_TOO_SMALL;
     }
 
-    reply = (PSTATUS_REPLY)OutputBuffer;
-    RtlZeroMemory(reply, sizeof(STATUS_REPLY));
+    statusReply = (PCS_STATUS_REPLY_PAYLOAD)OutputBuffer;
+    RtlZeroMemory(statusReply, sizeof(CS_STATUS_REPLY_PAYLOAD));
 
-    // Get configuration with lock
-    KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrql);
-    reply->MonitoringEnabled = g_Context.MonitoringEnabled;
-    reply->DetectionSensitivity = g_Context.DetectionSensitivity;
-    KeReleaseSpinLock(&g_Context.ConfigLock, oldIrql);
+    // Rellenar la cabecera del payload de respuesta
+    statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST; // O un MSG_TYPE_STATUS_REPLY si se prefiere
+    // statusReply->Header.MessageId = ... ; // Podría ser el MessageId de la solicitud si se pasó
+    statusReply->Header.PayloadSize = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
-    // Get statistics with lock
-    KeAcquireSpinLock(&g_Context.StatisticsLock, &oldIrql);
-    reply->FileOperationCount = g_Context.FileOperationCount;
-    reply->MessagesSent = g_Context.MessagesSent;
-    reply->MessagesReceived = g_Context.MessagesReceived;
-    KeReleaseSpinLock(&g_Context.StatisticsLock, oldIrql);
+    // Rellenar información de versión
+    statusReply->DriverVersionMajor = CRYPTOSHIELD_VERSION_MAJOR;
+    statusReply->DriverVersionMinor = CRYPTOSHIELD_VERSION_MINOR;
+    statusReply->DriverVersionBuild = CRYPTOSHIELD_VERSION_BUILD;
+    statusReply->DriverLoadTime = g_Context.DriverLoadTime;
 
-    *ReturnOutputBufferLength = sizeof(STATUS_REPLY);
+    // Obtener configuración (protegida por spinlock)
+    KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrqlCfg);
+    statusReply->CurrentConfigFlags = g_Context.ActiveConfigFlags;
+    statusReply->CurrentDetectionSensitivity = g_Context.DetectionSensitivity;
+    KeReleaseSpinLock(&g_Context.ConfigLock, oldIrqlCfg);
 
-    CS_INFO("Status request handled - Ops: %d, Sent: %d, Recv: %d",
-        reply->FileOperationCount, reply->MessagesSent, reply->MessagesReceived);
+    // Obtener estadísticas (protegidas por spinlock)
+    KeAcquireSpinLock(&g_Context.StatisticsLock, &oldIrqlStats);
+    statusReply->TotalOperationsMonitored = g_Context.FileOperationsMonitored;
+    statusReply->OperationsBlocked = g_Context.OperationsBlockedByDriver;
+    statusReply->ThreatsDetected = g_Context.ThreatsDetectedByDriver;
+    // statusReply->FilesQuarantined = ... ; // Si se lleva esta cuenta
+    statusReply->KernelMessagesSent = g_Context.MessagesSentToUserMode;
+    statusReply->KernelMessagesReceived = g_Context.MessagesReceivedFromUserMode;
+    KeReleaseSpinLock(&g_Context.StatisticsLock, oldIrqlStats);
+
+    // Rellenar otra información de estado si está disponible
+    // statusReply->MonitoredProcessesCount = g_Context.MonitoredProcessesCount;
+    // statusReply->DriverMemoryUsageKB = g_Context.CurrentMemoryUsageKB;
+
+    *ActualOutputLength = sizeof(CS_STATUS_REPLY_PAYLOAD);
+    CS_LOG_INFO("Status reply prepared. Monitored Ops: %lld", statusReply->TotalOperationsMonitored);
 
     return STATUS_SUCCESS;
 }
 
-/**
- * @brief Handles configuration update from user mode
- * @details Updates driver configuration settings
- *
- * @param Message Configuration message
- * @param MessageLength Message size
- * @return STATUS_SUCCESS on success
- */
-NTSTATUS HandleConfigUpdate(
-    _In_ PCRYPTOSHIELD_MESSAGE Message,
-    _In_ ULONG MessageLength
+static NTSTATUS HandleConfigUpdateMessage(
+    _In_ PCS_CONFIG_UPDATE_PAYLOAD ConfigUpdatePayload, // De Shared.h
+    _In_ ULONG PayloadLength // Tamaño del payload recibido
 )
 {
-    typedef struct _CONFIG_UPDATE {
-        CRYPTOSHIELD_MESSAGE Header;
-        BOOLEAN MonitoringEnabled;
-        ULONG DetectionSensitivity;
-    } CONFIG_UPDATE, * PCONFIG_UPDATE;
-
-    PCONFIG_UPDATE config = NULL;
     KIRQL oldIrql;
+    BOOLEAN newMonitoringEnabled;
 
-    // Validate message size
-    if (MessageLength < sizeof(CONFIG_UPDATE)) {
-        return STATUS_BUFFER_TOO_SMALL;
+    UNREFERENCED_PARAMETER(PayloadLength); // Ya validado parcialmente por el llamador.
+    PAGED_CODE();
+
+    // Validar los nuevos valores de configuración
+    if (ConfigUpdatePayload->NewDetectionSensitivity > MAX_DETECTION_SENSITIVITY) {
+        CS_LOG_WARNING("Invalid new detection sensitivity received: %u", ConfigUpdatePayload->NewDetectionSensitivity);
+        return STATUS_INVALID_PARAMETER_2; // O un error más específico
     }
+    // Se podrían validar otros flags y acciones aquí.
 
-    config = (PCONFIG_UPDATE)Message;
+    newMonitoringEnabled = (ConfigUpdatePayload->NewConfigFlags & CONFIG_FLAG_MONITORING_ENABLED) ? TRUE : FALSE;
 
-    // Validate configuration values
-    if (config->DetectionSensitivity > 100) {
-        CS_WARNING("Invalid detection sensitivity: %d", config->DetectionSensitivity);
+    // Actualizar la configuración global del driver (protegida por spinlock)
+    KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrql);
+    g_Context.MonitoringEnabled = newMonitoringEnabled;
+    g_Context.DetectionSensitivity = ConfigUpdatePayload->NewDetectionSensitivity;
+    g_Context.ActiveConfigFlags = ConfigUpdatePayload->NewConfigFlags;
+    g_Context.ActiveResponseActions = ConfigUpdatePayload->NewResponseActions;
+    KeReleaseSpinLock(&g_Context.ConfigLock, oldIrql);
+
+    CS_LOG_INFO("Configuration updated by user service. Monitoring: %s, Sensitivity: %u, Flags: 0x%X, Actions: 0x%X",
+        g_Context.MonitoringEnabled ? "Enabled" : "Disabled",
+        g_Context.DetectionSensitivity,
+        g_Context.ActiveConfigFlags,
+        g_Context.ActiveResponseActions);
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS HandleShutdownRequestMessage(VOID)
+{
+    PAGED_CODE();
+    CS_LOG_INFO("Shutdown request received from user service.");
+
+    // Preparar para la descarga: deshabilitar el monitoreo.
+    // El FilterUnloadCallback se encargará de la limpieza final.
+    KeAcquireSpinLockAtDpcLevel(&g_Context.ConfigLock); // Usar ConfigLock para proteger MonitoringEnabled
+    g_Context.MonitoringEnabled = FALSE;
+    // También se podría establecer g_Context.ActiveConfigFlags &= ~CONFIG_FLAG_MONITORING_ENABLED;
+    KeReleaseSpinLockFromDpcLevel(&g_Context.ConfigLock);
+
+    CS_LOG_INFO("Monitoring disabled due to shutdown request.");
+
+    // No se puede iniciar la descarga del driver desde aquí.
+    // El servicio de usuario tendría que coordinar la detención del servicio y la descarga del driver.
+    return STATUS_SUCCESS;
+}
+
+
+// ----- Función para Enviar Mensajes al Servicio de Usuario -----
+/**
+ * @brief Sends a message (payload) to the connected user-mode service.
+ * Esta función se encarga de la FILTER_MESSAGE_HEADER si se espera una respuesta.
+ */
+NTSTATUS SendMessageToUserService(
+    _In_ PCS_MESSAGE_PAYLOAD_HEADER PayloadHeader, // Puntero al payload (debe ser un tipo de Shared.h)
+    _In_ ULONG PayloadSize,                        // Tamaño del payload
+    _Out_opt_ PVOID ReplyBuffer,                   // Buffer para la respuesta del servicio (debe ser KERNEL_EXPECTED_USER_REPLY o similar)
+    _Inout_opt_ PULONG ReplyLength                 // Tamaño del buffer de respuesta / tamaño devuelto
+)
+{
+    NTSTATUS status;
+    PVOID messageToSendBuffer = NULL;
+    ULONG messageToSendSize = 0;
+    LARGE_INTEGER timeout;
+
+    // CS_ASSERT_IRQL_PASSIVE(); // FltSendMessage debe llamarse en PASSIVE_LEVEL
+
+    if (g_Context.IsUnloading || !g_Context.ClientConnected || g_Context.ClientPort == NULL) {
+        return STATUS_PORT_DISCONNECTED; // O STATUS_SHUTDOWN_IN_PROGRESS
+    }
+    if (PayloadHeader == NULL || PayloadSize == 0) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    // Update configuration with lock
-    KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrql);
-    g_Context.MonitoringEnabled = config->MonitoringEnabled;
-    g_Context.DetectionSensitivity = config->DetectionSensitivity;
-    KeReleaseSpinLock(&g_Context.ConfigLock, oldIrql);
-
-    CS_INFO("Configuration updated - Monitoring: %s, Sensitivity: %d",
-        config->MonitoringEnabled ? "Enabled" : "Disabled",
-        config->DetectionSensitivity);
-
-    return STATUS_SUCCESS;
-}
-
-/**
- * @brief Handles shutdown request from user mode
- * @details Prepares driver for clean shutdown
- *
- * @return STATUS_SUCCESS
- */
-NTSTATUS HandleShutdownRequest(VOID)
-{
-    CS_INFO("Shutdown request received");
-
-    // Set monitoring to disabled to stop new operations
-    InterlockedExchange8((CHAR*)&g_Context.MonitoringEnabled, FALSE);
-
-    // Note: Actual unload will be handled by FilterUnload callback
-    // We just prepare for shutdown here
-
-    return STATUS_SUCCESS;
-}
-
-/**
- * @brief Sends alert message to user mode
- * @details Used for high-priority notifications
- *
- * @param AlertType Type of alert
- * @param Description Alert description
- * @return STATUS_SUCCESS on success
- */
-NTSTATUS SendAlertMessage(
-    _In_ ULONG AlertType,
-    _In_ PCWSTR Description
-)
-{
-    typedef struct _ALERT_MESSAGE {
-        CRYPTOSHIELD_MESSAGE Header;
-        ULONG AlertType;
-        WCHAR Description[256];
-    } ALERT_MESSAGE, * PALERT_MESSAGE;
-
-    NTSTATUS status = STATUS_SUCCESS;
-    PALERT_MESSAGE alert = NULL;
-    LARGE_INTEGER timeout = { 0 };
-    ULONG replyLength = 0;
-    CRYPTOSHIELD_REPLY reply = { 0 };
-
-    // Check if client is connected
-    if (!g_Context.ClientConnected || g_Context.ClientPort == NULL) {
-        return STATUS_PORT_DISCONNECTED;
-    }
-
-    // Allocate alert message
-    alert = (PALERT_MESSAGE)CS_ALLOC_POOL(sizeof(ALERT_MESSAGE));
-    if (alert == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
-
-    __try {
-        // Initialize alert message
-        RtlZeroMemory(alert, sizeof(ALERT_MESSAGE));
-        alert->Header.MessageType = MSG_FILE_OPERATION;  // Reuse for now
-        alert->AlertType = AlertType;
-
-        // Copy description
-        if (Description != NULL) {
-            wcscpy_s(alert->Description,
-                sizeof(alert->Description) / sizeof(WCHAR),
-                Description);
+    // Si se espera una respuesta, el buffer que se envía a FltSendMessage DEBE
+    // comenzar con una FILTER_MESSAGE_HEADER. El payload sigue después.
+    if (ReplyBuffer != NULL && ReplyLength != NULL && *ReplyLength > 0) {
+        messageToSendSize = sizeof(FILTER_MESSAGE_HEADER) + PayloadSize;
+        messageToSendBuffer = CS_ALLOCATE_POOL(POOL_FLAG_NON_PAGED, messageToSendSize); // O PagedPool si el contenido lo permite
+        if (messageToSendBuffer == NULL) {
+            CS_LOG_ERROR("Failed to allocate buffer for message with filter header.");
+            return STATUS_INSUFFICIENT_RESOURCES;
         }
-
-        // Set timeout (50ms for alerts)
-        timeout.QuadPart = -500000;
-
-        // Send alert
-        status = FltSendMessage(g_Context.FilterHandle,
-            &g_Context.ClientPort,
-            alert,
-            sizeof(ALERT_MESSAGE),
-            &reply,
-            &replyLength,
-            &timeout);
-
-        if (!NT_SUCCESS(status)) {
-            CS_WARNING("Failed to send alert: 0x%08x", status);
-        }
-
+        // La FILTER_MESSAGE_HEADER (ReplyLength, MessageId) es inicializada por FltSendMessage.
+        // Solo necesitamos copiar el payload después de ella.
+        RtlCopyMemory((PUCHAR)messageToSendBuffer + sizeof(FILTER_MESSAGE_HEADER), PayloadHeader, PayloadSize);
     }
-    __finally {
-        if (alert != NULL) {
-            CS_FREE_POOL(alert);
+    else {
+        // Si no se espera respuesta, se puede enviar el payload directamente.
+        // (Aunque FltSendMessage aún podría requerir la cabecera si ciertos parámetros no son NULL).
+        // Para ser consistentes y más seguros, siempre podríamos incluir FILTER_MESSAGE_HEADER.
+        // O, si es una notificación pura sin respuesta, se podría intentar enviar solo el payload.
+        // Por ahora, asumiremos que si no hay ReplyBuffer, enviamos solo el payload.
+        // ¡CUIDADO! La documentación de FltSendMessage es específica:
+        // "If ReplyBuffer is NULL, SenderBuffer does not need to begin with a FILTER_MESSAGE_HEADER structure."
+        // "If ReplyBuffer is not NULL, SenderBuffer must begin with a FILTER_MESSAGE_HEADER structure."
+        messageToSendBuffer = (PVOID)PayloadHeader; // Enviar el payload directamente
+        messageToSendSize = PayloadSize;
+    }
+
+    // Establecer un timeout para el envío del mensaje (ej. 500 ms)
+    timeout.QuadPart = -(500LL * 10000LL); // 500 ms en unidades de 100ns, negativo para tiempo relativo
+
+    status = FltSendMessage(
+        g_Context.FilterHandle,
+        &g_Context.ClientPort,      // Puntero al handle del puerto del cliente
+        messageToSendBuffer,        // Buffer a enviar (con o sin FILTER_MESSAGE_HEADER)
+        messageToSendSize,          // Tamaño del buffer a enviar
+        ReplyBuffer,                // Buffer para recibir la respuesta (si hay)
+        ReplyLength,                // Puntero al tamaño del buffer de respuesta / tamaño real
+        &timeout                    // Timeout para la operación
+    );
+
+    // Si se asignó un buffer intermedio para incluir FILTER_MESSAGE_HEADER, liberarlo.
+    if (ReplyBuffer != NULL && messageToSendBuffer != PayloadHeader) {
+        CS_FREE_POOL(messageToSendBuffer);
+    }
+
+    if (NT_SUCCESS(status)) {
+        // InterlockedIncrement64(&g_Context.MessagesSentToUserMode); // Se incrementa en el llamador (SendFileOperationNotification)
+        CS_LOG_TRACE("Message (type %u) sent to user service. Status: 0x%08X", PayloadHeader->MessageType, status);
+        if (ReplyBuffer != NULL && NT_SUCCESS(status)) {
+            CS_LOG_TRACE("Reply received from user service. Length: %u", (ReplyLength ? *ReplyLength : 0));
         }
     }
-
+    else {
+        if (status == STATUS_TIMEOUT) {
+            CS_LOG_WARNING("Timeout sending message (type %u) to user service.", PayloadHeader->MessageType);
+        }
+        else if (status == STATUS_PORT_DISCONNECTED) {
+            CS_LOG_WARNING("User service port disconnected while sending message (type %u).", PayloadHeader->MessageType);
+            // Marcar como desconectado si FltSendMessage lo indica.
+            // DisconnectNotifyCallback debería manejar la limpieza final de g_Context.ClientPort.
+            ExEnterCriticalRegionAndAcquireResourceExclusive(&g_Context.PortResource);
+            if (g_Context.ClientConnected) { // Solo si no se ha desconectado ya
+                g_Context.ClientConnected = FALSE;
+                // g_Context.ClientPort = NULL; // No hacer NULL aquí directamente, DisconnectNotifyCallback lo hará.
+                                                // FltCloseClientPort lo hace el Filter Manager.
+            }
+            ExReleaseResourceAndLeaveCriticalRegion(&g_Context.PortResource);
+        }
+        else {
+            CS_LOG_WARNING("Failed to send message (type %u) to user service. Status: 0x%08X",
+                PayloadHeader->MessageType, status);
+        }
+    }
     return status;
 }

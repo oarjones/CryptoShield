@@ -11,6 +11,8 @@
 #include <sstream>
 #include <iomanip>
 #include <chrono>
+//#include <ntstatus.h>
+
 
 namespace CryptoShield {
 
@@ -309,7 +311,7 @@ namespace CryptoShield {
                     FilterReply reply = {};
                     reply.header.Status = 0;
                     reply.header.MessageId = message->header.MessageId;
-                    reply.status = STATUS_SUCCESS;
+                    reply.status = 0L; //STATUS_SUCCESS;
                     reply.allow_operation = TRUE;
 
                     hr = FilterReplyMessage(

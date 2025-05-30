@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <vector>
 #include <fstream>
+#include <optional>
 
 namespace CryptoShield {
 
@@ -275,7 +276,8 @@ namespace CryptoShield {
 
         // Logging
         std::mutex log_mutex_;
-        std::ofstream log_file_;
+        //std::ofstream log_file_;
+        std::wofstream log_file_; // Ahora
         std::wstring current_log_date_;
 
         // Pattern detection
@@ -329,8 +331,10 @@ namespace CryptoShield {
     private:
         std::wstring log_directory_;
         std::mutex log_mutex_;
-        std::ofstream operation_log_;
-        std::ofstream alert_log_;
+        /*std::ofstream operation_log_;
+        std::ofstream alert_log_;*/
+        std::wofstream operation_log_;
+        std::wofstream alert_log_;
 
         /**
          * @brief Ensure log directory exists

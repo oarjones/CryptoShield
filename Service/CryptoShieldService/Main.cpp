@@ -19,7 +19,7 @@
  // Service name and display name
 constexpr wchar_t SERVICE_NAME[] = L"CryptoShieldService";
 constexpr wchar_t SERVICE_DISPLAY_NAME[] = L"CryptoShield Anti-Ransomware Service";
-constexpr wchar_t SERVICE_DESCRIPTION[] = L"Protects system against ransomware attacks";
+constexpr wchar_t SERVICE_DESCRIPTION_FUNC[] = L"Protects system against ransomware attacks";
 
 // Service control codes
 constexpr DWORD SERVICE_CONTROL_CUSTOM_SHUTDOWN = 128;
@@ -491,7 +491,7 @@ bool InstallService()
 
     if (service) {
         // Set service description
-        SERVICE_DESCRIPTIONW description = { const_cast<LPWSTR>(SERVICE_DESCRIPTION) };
+        SERVICE_DESCRIPTIONW description = { const_cast<LPWSTR>(SERVICE_DESCRIPTION_FUNC) };
         ChangeServiceConfig2W(service, SERVICE_CONFIG_DESCRIPTION, &description);
 
         // Set recovery options

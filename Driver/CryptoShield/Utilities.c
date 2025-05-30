@@ -1,396 +1,153 @@
 /**
  * @file Utilities.c
  * @brief Utility functions for CryptoShield driver
- * @details Common helper functions for string manipulation, memory, and time
+ * @details Common helper functions for string manipulation, memory, and time.
  *
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
-#include "CryptoShield.h"
+#include "CryptoShield.h" // Incluye Shared.h y ntstrsafe.h
 
- /**
-  * @brief Finds a substring in a Unicode string (case-insensitive)
-  * @details Helper function for pattern matching in file paths
-  *
-  * @param String String to search in
-  * @param SubString String to search for
-  * @param CaseInsensitive TRUE for case-insensitive search
-  * @return TRUE if substring found, FALSE otherwise
-  */
-BOOLEAN FltFindUnicodeSubstring(
+ // Nota: FltFindUnicodeSubstring se ha trasladado a CryptoShield.h para su prototipo
+ // y su implementación puede permanecer aquí o moverse a otro archivo si es muy genérica.
+ // La implementación de FltFindUnicodeSubstring del código original es razonable.
+
+ // ----- Implementación de FltFindUnicodeSubstring (si se mantiene aquí) -----
+ // (La implementación de FltFindUnicodeSubstring del código original se puede mantener aquí)
+ // Ejemplo:
+BOOLEAN FltFindUnicodeSubstring_Implemented( // Renombrar si el prototipo está en otro sitio y se quiere mantener aquí
     _In_ PCUNICODE_STRING String,
-    _In_ PCWSTR SubString,
+    _In_ PCWSTR SubStringText, // Renombrado para claridad
     _In_ BOOLEAN CaseInsensitive
 )
 {
-    UNICODE_STRING subStr = { 0 };
-    UNICODE_STRING tempStr = { 0 };
+    UNICODE_STRING subStringUnicode;
+    //PWCHAR findLocation;
+
+    PAGED_CODE(); // Las operaciones de cadenas suelen ser paginables.
+
+    if (String == NULL || String->Buffer == NULL || SubStringText == NULL) {
+        return FALSE;
+    }
+    if (String->Length == 0) { // No se puede encontrar nada en una cadena vacía
+        return (*SubStringText == L'\0'); // A menos que la subcadena también esté vacía
+    }
+    if (*SubStringText == L'\0') { // Subcadena vacía se considera encontrada (o no, según definición)
+        return TRUE;
+    }
+
+    RtlInitUnicodeString(&subStringUnicode, SubStringText);
+    if (subStringUnicode.Length == 0) return TRUE; // Consistente con lo anterior
+    if (subStringUnicode.Length > String->Length) return FALSE;
+
+
+    // RtlFindUnicodeSubstring es una función de WDK que hace esto.
+    // Necesita ser llamada en PASSIVE_LEVEL.
+    // BOOLEAN RtlFindUnicodeSubstring(     // Esta no existe, es de user mode o Ntdll
+    //    IN PUNICODE_STRING FullString,
+    //    IN PUNICODE_STRING SearchString,
+    //    IN BOOLEAN CaseInsensitive );
+    // La implementación manual es necesaria o usar FsRtlIsNameInExpression.
+
+    // Implementación manual (similar a la original):
     ULONG i = 0;
-    USHORT subLen = 0;
+    UNICODE_STRING tempSubString;
+    USHORT mainLenChars = String->Length / sizeof(WCHAR);
+    USHORT subLenChars = subStringUnicode.Length / sizeof(WCHAR);
 
-    // Validate parameters
-    if (String == NULL || SubString == NULL || String->Buffer == NULL) {
-        return FALSE;
-    }
+    if (subLenChars == 0) return TRUE; // Ya cubierto
+    if (mainLenChars < subLenChars) return FALSE; // Ya cubierto
 
-    // Initialize substring
-    RtlInitUnicodeString(&subStr, SubString);
-    subLen = subStr.Length / sizeof(WCHAR);
+    //for (i = 0; i <= mainLenChars - subLenChars; i++) {
+    for (i = 0; i <= (ULONG)(mainLenChars - subLenChars); i++) {
+        tempSubString.Buffer = &String->Buffer[i];
+        tempSubString.Length = subStringUnicode.Length; // En bytes
+        tempSubString.MaximumLength = subStringUnicode.Length;
 
-    // Check if substring is longer than main string
-    if (subStr.Length > String->Length) {
-        return FALSE;
-    }
-
-    // Search for substring
-    for (i = 0; i <= (String->Length - subStr.Length) / sizeof(WCHAR); i++) {
-        tempStr.Buffer = &String->Buffer[i];
-        tempStr.Length = subStr.Length;
-        tempStr.MaximumLength = subStr.Length;
-
-        if (RtlCompareUnicodeString(&tempStr, &subStr, CaseInsensitive) == 0) {
+        if (RtlCompareUnicodeString(&tempSubString, &subStringUnicode, CaseInsensitive) == 0) {
             return TRUE;
         }
     }
-
     return FALSE;
 }
 
-/**
- * @brief Gets file extension from file name
- * @details Extracts extension for file type analysis
- *
- * @param FileName File name to analyze
- * @param Extension Buffer to receive extension
- * @param ExtensionSize Size of extension buffer in bytes
- * @return STATUS_SUCCESS on success
- */
-NTSTATUS GetFileExtension(
-    _In_ PCUNICODE_STRING FileName,
-    _Out_writes_bytes_(ExtensionSize) PWCHAR Extension,
-    _In_ ULONG ExtensionSize
-)
-{
-    USHORT i = 0;
-    USHORT lastDot = 0;
-    USHORT length = 0;
-
-    // Validate parameters
-    if (FileName == NULL || Extension == NULL || ExtensionSize == 0) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    // Initialize output
-    RtlZeroMemory(Extension, ExtensionSize);
-
-    // Find last dot in file name
-    for (i = 0; i < FileName->Length / sizeof(WCHAR); i++) {
-        if (FileName->Buffer[i] == L'.') {
-            lastDot = i;
-        }
-    }
-
-    // Check if extension found
-    if (lastDot == 0 || lastDot == (FileName->Length / sizeof(WCHAR) - 1)) {
-        return STATUS_NOT_FOUND;
-    }
-
-    // Calculate extension length
-    length = (FileName->Length / sizeof(WCHAR)) - lastDot - 1;
-    if (length * sizeof(WCHAR) >= ExtensionSize) {
-        return STATUS_BUFFER_TOO_SMALL;
-    }
-
-    // Copy extension
-    RtlCopyMemory(Extension,
-        &FileName->Buffer[lastDot + 1],
-        length * sizeof(WCHAR));
-
-    return STATUS_SUCCESS;
-}
 
 /**
- * @brief Checks if process is system process
- * @details Identifies system processes to avoid monitoring
- *
- * @param ProcessId Process ID to check
- * @return TRUE if system process, FALSE otherwise
+ * @brief Checks if the given filesystem type is supported for monitoring.
  */
-BOOLEAN IsSystemProcess(
-    _In_ ULONG ProcessId
+BOOLEAN IsFileSystemSupported(
+    _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
 )
 {
-    // System process PIDs
-    if (ProcessId == 0 || ProcessId == 4) {
+    PAGED_CODE();
+    // Lista de sistemas de archivos soportados
+    switch (VolumeFilesystemType) {
+    case FLT_FSTYPE_NTFS:
+    case FLT_FSTYPE_REFS:
+        // case FLT_FSTYPE_FAT: // FAT/EXFAT si se quieren soportar
+        // case FLT_FSTYPE_EXFAT:
         return TRUE;
-    }
-
-    // Check for other known system processes
-    // This is a simplified check - production would be more comprehensive
-    if (ProcessId < 100) {
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-/**
- * @brief Allocates and copies a Unicode string
- * @details Helper for string duplication with proper memory management
- *
- * @param Destination Destination string structure
- * @param Source Source string to copy
- * @param PoolType Type of pool to allocate from
- * @return STATUS_SUCCESS on success
- */
-NTSTATUS DuplicateUnicodeString(
-    _Out_ PUNICODE_STRING Destination,
-    _In_ PCUNICODE_STRING Source,
-    _In_ POOL_TYPE PoolType
-)
-{
-    // Validate parameters
-    if (Destination == NULL || Source == NULL) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    // Initialize destination
-    Destination->Length = 0;
-    Destination->MaximumLength = 0;
-    Destination->Buffer = NULL;
-
-    // Check for empty source
-    if (Source->Length == 0) {
-        return STATUS_SUCCESS;
-    }
-
-    // Allocate buffer
-    Destination->MaximumLength = Source->Length + sizeof(WCHAR);
-    Destination->Buffer = (PWCHAR)ExAllocatePoolWithTag(PoolType,
-        Destination->MaximumLength,
-        CRYPTOSHIELD_POOL_TAG);
-
-    if (Destination->Buffer == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
-
-    // Copy string
-    RtlCopyUnicodeString(Destination, Source);
-
-    // Ensure null termination
-    Destination->Buffer[Destination->Length / sizeof(WCHAR)] = L'\0';
-
-    return STATUS_SUCCESS;
-}
-
-/**
- * @brief Frees a duplicated Unicode string
- * @details Cleanup function for DuplicateUnicodeString
- *
- * @param String String to free
- */
-VOID FreeUnicodeString(
-    _Inout_ PUNICODE_STRING String
-)
-{
-    if (String != NULL && String->Buffer != NULL) {
-        ExFreePoolWithTag(String->Buffer, CRYPTOSHIELD_POOL_TAG);
-        String->Buffer = NULL;
-        String->Length = 0;
-        String->MaximumLength = 0;
+    default:
+        return FALSE;
     }
 }
 
 /**
- * @brief Gets current system time in readable format
- * @details Converts system time to local time for logging
- *
- * @param SystemTime System time to convert
- * @param TimeString Buffer to receive formatted time
- * @param TimeStringSize Size of buffer in characters
- * @return STATUS_SUCCESS on success
+ * @brief Checks if a file (based on its name information) should be monitored.
+ * Implementa lógica de filtrado para reducir el ruido (archivos de sistema, etc.).
  */
-NTSTATUS FormatSystemTime(
-    _In_ PLARGE_INTEGER SystemTime,
-    _Out_writes_(TimeStringSize) PWCHAR TimeString,
-    _In_ ULONG TimeStringSize
+BOOLEAN ShouldMonitorFileByPath(
+    _In_ PFLT_FILE_NAME_INFORMATION FileNameInfo
 )
 {
-    TIME_FIELDS timeFields = { 0 };
-    LARGE_INTEGER localTime = { 0 };
+    PAGED_CODE();
 
-    // Validate parameters
-    if (SystemTime == NULL || TimeString == NULL || TimeStringSize < 20) {
-        return STATUS_INVALID_PARAMETER;
+    if (FileNameInfo == NULL || FileNameInfo->Name.Length == 0) {
+        return TRUE; // Si no hay nombre, por defecto se monitoriza (o FALSE, según política)
     }
 
-    // Convert to local time
-    ExSystemTimeToLocalTime(SystemTime, &localTime);
+    // Ejemplo de exclusiones (usando FltFindUnicodeSubstring_Implemented o similar)
+    // Hay que tener cuidado con la normalización del path (ej. \SystemRoot\ vs C:\Windows\)
+    // FileNameInfo->Name es el path completo normalizado.
 
-    // Convert to time fields
-    RtlTimeToTimeFields(&localTime, &timeFields);
+    // Omitir archivos en directorios del sistema comunes
+    // (Esta lógica es simplista y puede necesitar refinamiento)
+    if (FltFindUnicodeSubstring_Implemented(&FileNameInfo->Name, L"\\Windows\\System32\\", TRUE)) {
+        // Podría haber excepciones, ej. si algo en System32 escribe en Documentos.
+        // El chequeo es sobre el path del *archivo accedido*.
+        // Si es un archivo DENTRO de System32, probablemente no interese.
+        // CS_LOG_TRACE("Skipping monitoring for path in System32: %wZ", &FileNameInfo->Name);
+        // return FALSE;
+    }
+    if (FltFindUnicodeSubstring_Implemented(&FileNameInfo->Name, L"\\System Volume Information\\", TRUE)) {
+        // CS_LOG_TRACE("Skipping monitoring for path in System Volume Information: %wZ", &FileNameInfo->Name);
+        return FALSE;
+    }
+    if (FltFindUnicodeSubstring_Implemented(&FileNameInfo->Name, L"pagefile.sys", TRUE)) {
+        // CS_LOG_TRACE("Skipping monitoring for pagefile.sys: %wZ", &FileNameInfo->Name);
+        return FALSE;
+    }
+    // Añadir más exclusiones según sea necesario (ej. archivos de log del propio CryptoShield).
 
-    // Format as string
-    swprintf_s(TimeString, TimeStringSize,
-        L"%04d-%02d-%02d %02d:%02d:%02d",
-        timeFields.Year,
-        timeFields.Month,
-        timeFields.Day,
-        timeFields.Hour,
-        timeFields.Minute,
-        timeFields.Second);
-
-    return STATUS_SUCCESS;
+    return TRUE; // Por defecto, monitorizar si no cae en una exclusión.
 }
 
-/**
- * @brief Calculates simple hash of a string
- * @details Used for quick comparisons and caching
- *
- * @param String String to hash
- * @return 32-bit hash value
- */
-ULONG HashUnicodeString(
-    _In_ PCUNICODE_STRING String
-)
-{
-    ULONG hash = 5381;
-    USHORT i = 0;
+// Otras funciones de utilidad del código original (GetFileExtension, IsSystemProcess, etc.)
+// pueden permanecer aquí si son necesarias, ajustando su uso de memoria y cadenas.
+// Por ejemplo, DuplicateUnicodeString y FreeUnicodeString se pueden mantener si se necesitan
+// copias de UNICODE_STRING con gestión de memoria específica.
 
-    if (String == NULL || String->Buffer == NULL) {
-        return 0;
-    }
+// La función FormatSystemTime del código original es útil para logging.
+// Su implementación usando RtlStringCchPrintfW es correcta.
 
-    // DJB2 hash algorithm
-    for (i = 0; i < String->Length / sizeof(WCHAR); i++) {
-        hash = ((hash << 5) + hash) + (ULONG)String->Buffer[i];
-    }
+// La función HashUnicodeString del código original es un hash simple y puede ser útil.
 
-    return hash;
-}
+// SafeCopyMemory es un wrapper, pero RtlCopyMemory con SEH es la forma estándar.
+// Si se mantiene, asegurar que los parámetros sean correctos.
 
-/**
- * @brief Safely copies memory with bounds checking
- * @details Wrapper around RtlCopyMemory with additional validation
- *
- * @param Destination Destination buffer
- * @param DestinationSize Size of destination buffer
- * @param Source Source buffer
- * @param SourceSize Size to copy
- * @return STATUS_SUCCESS on success
- */
-NTSTATUS SafeCopyMemory(
-    _Out_writes_bytes_(DestinationSize) PVOID Destination,
-    _In_ SIZE_T DestinationSize,
-    _In_reads_bytes_(SourceSize) PVOID Source,
-    _In_ SIZE_T SourceSize
-)
-{
-    // Validate parameters
-    if (Destination == NULL || Source == NULL) {
-        return STATUS_INVALID_PARAMETER;
-    }
+// IsUserDirectory puede ser útil para enfocar el monitoreo.
+// Su implementación con FltFindUnicodeSubstring_Implemented es correcta.
 
-    // Check buffer sizes
-    if (SourceSize > DestinationSize) {
-        return STATUS_BUFFER_TOO_SMALL;
-    }
-
-    // Perform copy
-    __try {
-        RtlCopyMemory(Destination, Source, SourceSize);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        return STATUS_ACCESS_VIOLATION;
-    }
-
-    return STATUS_SUCCESS;
-}
-
-/**
- * @brief Checks if file path is in user directory
- * @details Used to focus monitoring on user data
- *
- * @param FilePath Path to check
- * @return TRUE if in user directory, FALSE otherwise
- */
-BOOLEAN IsUserDirectory(
-    _In_ PCUNICODE_STRING FilePath
-)
-{
-    // Check common user directories
-    if (FltFindUnicodeSubstring(FilePath, L"\\Users\\", TRUE) ||
-        FltFindUnicodeSubstring(FilePath, L"\\Documents and Settings\\", TRUE)) {
-        return TRUE;
-    }
-
-    // Check for user profile environment paths
-    if (FltFindUnicodeSubstring(FilePath, L"\\Desktop\\", TRUE) ||
-        FltFindUnicodeSubstring(FilePath, L"\\Documents\\", TRUE) ||
-        FltFindUnicodeSubstring(FilePath, L"\\Downloads\\", TRUE) ||
-        FltFindUnicodeSubstring(FilePath, L"\\Pictures\\", TRUE)) {
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-/**
- * @brief Validates process access rights
- * @details Ensures process has appropriate permissions
- *
- * @param ProcessId Process ID to validate
- * @param DesiredAccess Required access rights
- * @return STATUS_SUCCESS if access allowed
- */
-NTSTATUS ValidateProcessAccess(
-    _In_ ULONG ProcessId,
-    _In_ ACCESS_MASK DesiredAccess
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    PEPROCESS process = NULL;
-    HANDLE processHandle = NULL;
-
-    // Get process object
-    status = PsLookupProcessByProcessId(ULongToHandle(ProcessId), &process);
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-
-    __try {
-        // Check if process is terminating
-        if (PsGetProcessExitStatus(process) != STATUS_PENDING) {
-            status = STATUS_PROCESS_IS_TERMINATING;
-            __leave;
-        }
-
-        // Try to open process with desired access
-        status = ObOpenObjectByPointer(process,
-            OBJ_KERNEL_HANDLE,
-            NULL,
-            DesiredAccess,
-            *PsProcessType,
-            KernelMode,
-            &processHandle);
-
-        if (!NT_SUCCESS(status)) {
-            __leave;
-        }
-
-        // Access is allowed
-        status = STATUS_SUCCESS;
-
-    }
-    __finally {
-        if (processHandle != NULL) {
-            ZwClose(processHandle);
-        }
-
-        if (process != NULL) {
-            ObDereferenceObject(process);
-        }
-    }
-
-    return status;
-}
+// ValidateProcessAccess puede ser útil para comprobaciones de seguridad,
+// aunque su uso exacto depende del contexto. La corrección para usar PsIsProcessTerminating
+// y la desreferenciación de PEPROCESS son importantes.

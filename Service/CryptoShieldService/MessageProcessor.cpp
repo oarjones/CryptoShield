@@ -445,6 +445,8 @@ namespace CryptoShield {
 		auto duration = std::chrono::steady_clock::now() - process_info.first_seen;
 		auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 
+
+
 		if (seconds > 0 && process_info.operation_count / seconds > SUSPICIOUS_RATE_THRESHOLD) {
 			return true;
 		}
