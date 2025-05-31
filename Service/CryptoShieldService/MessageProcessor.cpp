@@ -5,7 +5,7 @@
  *
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
-
+#define NOMINMAX
 #include "MessageProcessor.h"
 #include <iostream>
 #include <sstream>
@@ -418,8 +418,8 @@ namespace CryptoShield {
 		}
 
 		// Cap at 100
-		//return std::min(suspicion_level, 100UL);
-		return (std::min)(suspicion_level, 100UL);
+		return std::min(suspicion_level, 100UL);
+		
 	}
 
 	/**
