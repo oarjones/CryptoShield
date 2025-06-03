@@ -30,6 +30,9 @@
     <ClInclude Include="Detection\BehavioralDetector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Detection\SystemActivityMonitor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CommunicationManager.cpp">
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Detection\BehavioralDetector.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Detection\SystemActivityMonitor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
