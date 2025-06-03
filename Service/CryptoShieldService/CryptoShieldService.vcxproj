@@ -141,6 +141,7 @@
     <ClInclude Include="CommunicationManager.h" />
     <ClInclude Include="Detection\BehavioralDetector.h" />
     <ClInclude Include="Detection\EntropyAnalyzer.h" />
+    <ClInclude Include="Detection\ScoringEngine.h" />
     <ClInclude Include="Detection\SystemActivityMonitor.h" />
     <ClInclude Include="Detection\TraditionalEngine.h" />
     <ClInclude Include="MessageProcessor.h" />
@@ -149,6 +150,7 @@
     <ClCompile Include="CommunicationManager.cpp" />
     <ClCompile Include="Detection\BehavioralDetector.cpp" />
     <ClCompile Include="Detection\EntropyAnalyzer.cpp" />
+    <ClCompile Include="Detection\ScoringEngine.cpp" />
     <ClCompile Include="Detection\SystemActivityMonitor.cpp" />
     <ClCompile Include="Detection\TraditionalEngine.cpp" />
     <ClCompile Include="Main.cpp" />
