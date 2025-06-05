@@ -325,7 +325,11 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     }
 
     // Enable monitoring in driver
-    communication_manager->UpdateConfiguration(true, 50);
+    // Default actions: Allow and Log. Adjust as necessary.
+    ULONG initial_config_flags = CONFIG_FLAG_MONITORING_ENABLED;
+    ULONG initial_sensitivity = 50;
+    ULONG initial_response_actions = ACTION_ALLOW | ACTION_LOG_ONLY; // Example default actions
+    communication_manager->UpdateConfiguration(initial_config_flags, initial_sensitivity, initial_response_actions);
 
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread started");
 
@@ -358,13 +362,21 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
                 WriteEventLog(EVENTLOG_INFORMATION_TYPE, stats_msg);
 
                 // Request driver status
-                CryptoShield::StatusReply driver_status;
+                CS_STATUS_REPLY_PAYLOAD driver_status = {}; // Use shared structure
+                // The RequestStatus signature is bool RequestStatus(CS_STATUS_REPLY_PAYLOAD& status_reply_data)
+                // The call communication_manager->RequestStatus(driver_status) is correct.
+                // However, RequestStatus in CommunicationManager.cpp needs to be updated
+                // to call the new SendMessage signature correctly. Assuming that fix for now.
                 if (communication_manager->RequestStatus(driver_status)) {
                     std::wstring driver_msg = L"Driver status - Monitoring: " +
-                        std::wstring(driver_status.monitoring_enabled ? L"Yes" : L"No") +
-                        L", Driver operations: " +
-                        std::to_wstring(driver_status.file_operation_count);
+                        std::wstring((driver_status.CurrentConfigFlags & CONFIG_FLAG_MONITORING_ENABLED) ? L"Enabled" : L"Disabled") +
+                        L", Sensitivity: " + std::to_wstring(driver_status.CurrentDetectionSensitivity) +
+                        L", Driver total operations monitored: " + std::to_wstring(driver_status.TotalOperationsMonitored) +
+                        L", Kernel messages sent: " + std::to_wstring(driver_status.KernelMessagesSent) +
+                        L", Kernel messages received: " + std::to_wstring(driver_status.KernelMessagesReceived);
                     WriteEventLog(EVENTLOG_INFORMATION_TYPE, driver_msg);
+                } else {
+                    WriteEventLog(EVENTLOG_WARNING_TYPE, L"Failed to retrieve driver status.");
                 }
 
                 last_stats_time = current_time;

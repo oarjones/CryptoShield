@@ -1,4 +1,5 @@
 #pragma once
+#include "../../../Common/Shared.h"
 /**
  * @file CommunicationManager.h
  * @brief Driver communication management interface
@@ -29,16 +30,6 @@ namespace CryptoShield {
     class MessageProcessor;
 
     /**
-     * @brief Message types matching kernel definitions
-     */
-    enum class MessageType : ULONG {
-        FileOperation = 1,
-        StatusRequest = 2,
-        ConfigUpdate = 3,
-        ShutdownRequest = 4
-    };
-
-    /**
      * @brief File operation types matching kernel definitions
      */
     enum class FileOperationType : ULONG {
@@ -47,51 +38,6 @@ namespace CryptoShield {
         Delete = 3,
         Rename = 4,
         SetInformation = 5
-    };
-
-    /**
-     * @brief Filter message structure (must match kernel structure)
-     */
-#pragma pack(push, 1)
-    struct FilterMessage {
-        FILTER_MESSAGE_HEADER header;
-        ULONG message_type;
-        ULONG process_id;
-        ULONG thread_id;
-        LARGE_INTEGER timestamp;
-        ULONG operation_type;
-        USHORT file_path_length;
-        WCHAR file_path[520];  // MAX_PATH * 2
-    };
-
-    /**
-     * @brief Filter reply structure
-     */
-    struct FilterReply {
-        FILTER_REPLY_HEADER header;
-        NTSTATUS status;
-        BOOLEAN allow_operation;
-    };
-#pragma pack(pop)
-
-    /**
-     * @brief Configuration update structure
-     */
-    struct ConfigUpdate {
-        FilterMessage header;
-        BOOLEAN monitoring_enabled;
-        ULONG detection_sensitivity;
-    };
-
-    /**
-     * @brief Status reply structure
-     */
-    struct StatusReply {
-        BOOLEAN monitoring_enabled;
-        ULONG detection_sensitivity;
-        ULONG file_operation_count;
-        ULONG messages_sent;
-        ULONG messages_received;
     };
 
     /**
@@ -258,7 +204,7 @@ namespace CryptoShield {
         FileOperationType type;
         ULONG process_id;
         ULONG thread_id;
-        std::wstring file_path;
+        WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
         FILETIME timestamp;
 
         /**
