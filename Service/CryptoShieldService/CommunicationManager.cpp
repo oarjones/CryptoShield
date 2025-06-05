@@ -8,7 +8,7 @@
 
 #include <windows.h>
 #include <fltUser.h>
-#include "../../../Common/Shared.h" // For CS_MESSAGE_PAYLOAD_HEADER, CS_FILE_OPERATION_PAYLOAD, etc.
+#include "Shared.h"   // For CS_MESSAGE_PAYLOAD_HEADER, CS_FILE_OPERATION_PAYLOAD, etc.
 #include "CommunicationManager.h"
 #include <iostream>
 #include <sstream>
