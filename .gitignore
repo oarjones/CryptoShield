@@ -180,3 +180,4 @@ $RECYCLE.BIN/
 # Puedes añadir rutas más específicas como:
 # Driver/CryptoShield/x64/
 # Pero las reglas genéricas suelen ser más fáciles de mantener.
+/DebugView.zip
