@@ -222,9 +222,11 @@ namespace CryptoShield {
         request_payload.Header.PayloadSize = sizeof(CS_STATUS_REQUEST_PAYLOAD);
 
         // Prepare buffer for the reply. The driver's reply via FilterSendMessage includes
-        // a FILTER_REPLY_HEADER followed by our CS_STATUS_REPLY_PAYLOAD.
-        const size_t reply_buffer_size = sizeof(FILTER_REPLY_HEADER) + sizeof(CS_STATUS_REPLY_PAYLOAD);
-        std::vector<BYTE> reply_buffer(reply_buffer_size);
+        // a FILTER_REPLY_HEADER followed by our CS_STATUS_REPLY_PAYLOAD.        
+
+        const size_t calculated_reply_buffer_size = sizeof(FILTER_REPLY_HEADER) + sizeof(CS_STATUS_REPLY_PAYLOAD);
+        std::vector<BYTE> reply_buffer(calculated_reply_buffer_size);
+        DWORD bytes_returned = 0; // Variable to store the number of bytes returned
 
         // Call SendMessage.
         // Note: Current SendMessage wrapper doesn't return actual bytes_returned from FilterSendMessage.
@@ -233,43 +235,44 @@ namespace CryptoShield {
             &request_payload,
             sizeof(request_payload),
             reply_buffer.data(),
-            reply_buffer_size,
-            1000 // Timeout in ms
+            static_cast<DWORD>(reply_buffer.size()), // Pass the actual size of the vector's buffer as DWORD
+            &bytes_returned,                         // Pass the address of bytes_returned
+            1000                                     // Timeout in ms
         );
 
         if (!send_success) {
-            LogError("RequestStatus - SendMessage failed", GetLastError()); // Or a more specific error
+            LogError("RequestStatus - SendMessage failed", GetLastError());
             return false;
         }
 
-        // Validate the received data based on the buffer we provided.
-        // Check if our buffer was even large enough for the minimal headers.
-        if (reply_buffer_size < sizeof(FILTER_REPLY_HEADER) + sizeof(CS_MESSAGE_PAYLOAD_HEADER)) {
-            LogError("RequestStatus - Reply buffer too small for minimal headers", ERROR_INVALID_DATA);
+        // Validate the received data using bytes_returned.
+        // Check if enough data was returned for at least the FILTER_REPLY_HEADER and the CS_MESSAGE_PAYLOAD_HEADER within CS_STATUS_REPLY_PAYLOAD
+        if (bytes_returned < (sizeof(FILTER_REPLY_HEADER) + sizeof(CS_MESSAGE_PAYLOAD_HEADER))) {
+            LogError("RequestStatus - Reply too small for minimal headers based on bytes_returned", ERROR_INVALID_DATA);
             return false;
         }
 
-        // The actual payload (CS_STATUS_REPLY_PAYLOAD) starts after FILTER_REPLY_HEADER.
         PCS_STATUS_REPLY_PAYLOAD actual_reply_payload =
             reinterpret_cast<PCS_STATUS_REPLY_PAYLOAD>(reply_buffer.data() + sizeof(FILTER_REPLY_HEADER));
 
-        // Validate the payload header from the reply.
-        // Check if the reported PayloadSize in the message matches what we expect for CS_STATUS_REPLY_PAYLOAD.
-        if (actual_reply_payload->Header.PayloadSize != sizeof(CS_STATUS_REPLY_PAYLOAD)) {
-            LogError("RequestStatus - Reply payload size mismatch", ERROR_INVALID_DATA);
-            std::wcerr << L"[CommunicationManager] Expected CS_STATUS_REPLY_PAYLOAD size " << sizeof(CS_STATUS_REPLY_PAYLOAD)
-                       << L", but received " << actual_reply_payload->Header.PayloadSize << std::endl;
+        // Ensure the entire CS_STATUS_REPLY_PAYLOAD was received
+        if (bytes_returned < (sizeof(FILTER_REPLY_HEADER) + sizeof(CS_STATUS_REPLY_PAYLOAD))) {
+            LogError("RequestStatus - Reply too small for full CS_STATUS_REPLY_PAYLOAD based on bytes_returned", ERROR_INVALID_DATA);
             return false;
         }
 
-        // Optionally, check actual_reply_payload->Header.MessageType.
-        // It could be MSG_TYPE_STATUS_REQUEST (driver echoes type) or a dedicated MSG_TYPE_STATUS_REPLY.
-        // For this example, we'll rely on PayloadSize and structure matching.
-        // if (actual_reply_payload->Header.MessageType != MSG_TYPE_STATUS_REQUEST &&
-        //     actual_reply_payload->Header.MessageType != MSG_TYPE_STATUS_REPLY) { // Assuming MSG_TYPE_STATUS_REPLY is defined
-        //     LogError("RequestStatus - Reply message type mismatch", ERROR_INVALID_DATA);
-        //     return false;
-        // }
+        // Verify that the PayloadSize in the header matches the expected size and doesn't exceed the received data
+        if (actual_reply_payload->Header.PayloadSize != sizeof(CS_STATUS_REPLY_PAYLOAD)) {
+            LogError("RequestStatus - Reply payload Header.PayloadSize mismatch", ERROR_INVALID_DATA);
+            std::wcerr << L"[CommunicationManager] Expected CS_STATUS_REPLY_PAYLOAD Header.PayloadSize " << sizeof(CS_STATUS_REPLY_PAYLOAD)
+                << L", but received " << actual_reply_payload->Header.PayloadSize << std::endl;
+            return false;
+        }
+
+        if (actual_reply_payload->Header.PayloadSize > (bytes_returned - sizeof(FILTER_REPLY_HEADER))) {
+            LogError("RequestStatus - Header.PayloadSize indicates more data than actually received in reply", ERROR_INVALID_DATA);
+            return false;
+        }
 
         // If all checks pass, copy the data to the output parameter.
         status_reply_data = *actual_reply_payload;
@@ -288,25 +291,52 @@ namespace CryptoShield {
     bool CommunicationManager::RequestShutdown()
     {
         if (!connected_.load()) {
+            // ERROR_NOT_CONNECTED (2250L) es un código de error estándar de Win32.
+            // Debería estar disponible si <windows.h> está incluido correctamente.
             LogError("RequestShutdown", ERROR_NOT_CONNECTED);
             return false;
         }
 
-        // FilterMessage request = {}; // FilterMessage was removed
-        // request.message_type = static_cast<ULONG>(MessageType::ShutdownRequest); // Enum was removed
-        // This function needs to be updated to use appropriate structures from Shared.h for shutdown command.
-        // A CS_MESSAGE_PAYLOAD_HEADER (with MessageType = MSG_TYPE_SHUTDOWN_REQUEST) would be sent.
+        // Construir el payload para la solicitud de apagado.
+        // Dado que Shared.h no define una estructura CS_SHUTDOWN_REQUEST_PAYLOAD específica
+        // que contenga más que la cabecera, podemos usar CS_MESSAGE_PAYLOAD_HEADER
+        // directamente o una estructura local simple que la envuelva.
+        // Usaremos una estructura local para mantener la coherencia con cómo se manejan
+        // otros payloads como CS_STATUS_REQUEST_PAYLOAD.
 
-        /* O L D   C O D E:
-        bool result = SendMessage(&request, sizeof(request));
+        struct ShutdownRequestPayload {
+            CS_MESSAGE_PAYLOAD_HEADER Header;
+            // No se necesitan campos adicionales para una solicitud de apagado simple.
+        } request_payload = {}; // Inicializa a ceros
+
+        request_payload.Header.MessageType = MSG_TYPE_SHUTDOWN_REQUEST; // Definido en Shared.h
+        request_payload.Header.MessageId = 0; // O un ID único si se implementa seguimiento de mensajes
+        request_payload.Header.PayloadSize = sizeof(request_payload); // Tamaño de nuestra estructura local
+
+        // Enviar el mensaje al driver.
+        // Las solicitudes de apagado generalmente no esperan un payload de datos como respuesta del driver;
+        // el driver actúa sobre la solicitud.
+        // La función SendMessage ya tiene manejo de errores y logging interno para fallos de FilterSendMessage.
+        bool result = SendMessage(
+            &request_payload,                // Puntero al payload
+            sizeof(request_payload),         // Tamaño del payload
+            nullptr,                         // No se espera un buffer de respuesta con datos
+            0,                               // Tamaño del buffer de respuesta es 0
+            nullptr,                         // No se necesita el número de bytes devueltos para esta llamada
+            1000                             // Timeout en milisegundos (ej. 1 segundo)
+        );
+
         if (result) {
-            std::wcout << L"[CommunicationManager] Shutdown request sent" << std::endl;
+            std::wcout << L"[CommunicationManager] Shutdown request sent successfully." << std::endl;
         }
+        else {
+            // SendMessage ya debería haber llamado a LogError si FilterSendMessage falló.
+            // Se podría añadir un log específico aquí si 'result' es falso por otras razones,
+            // aunque es improbable si SendMessage maneja bien todos los casos de error de la API.
+            std::wcerr << L"[CommunicationManager] Failed to send shutdown request." << std::endl;
+        }
+
         return result;
-        */
-        LogError("RequestShutdown", ERROR_NOT_IMPLEMENTED);
-        std::wcerr << L"[CommunicationManager] RequestShutdown is not fully implemented after refactoring." << std::endl;
-        return false;
     }
 
     /**

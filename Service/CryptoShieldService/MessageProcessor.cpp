@@ -411,7 +411,7 @@ namespace CryptoShield {
 		}
 
 		// Check for known ransomware patterns
-		if (operation.file_path.find(L".txt") != std::wstring::npos &&
+		if (std::wstring(operation.file_path).find(L".txt") != std::wstring::npos &&
 			operation.type == FileOperationType::Create) {
 			// Creating text files (possible ransom notes)
 			suspicion_level += 15;
