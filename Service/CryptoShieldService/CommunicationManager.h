@@ -1,4 +1,5 @@
 #pragma once
+#include "Shared.h"  
 /**
  * @file CommunicationManager.h
  * @brief Driver communication management interface
@@ -29,16 +30,6 @@ namespace CryptoShield {
     class MessageProcessor;
 
     /**
-     * @brief Message types matching kernel definitions
-     */
-    enum class MessageType : ULONG {
-        FileOperation = 1,
-        StatusRequest = 2,
-        ConfigUpdate = 3,
-        ShutdownRequest = 4
-    };
-
-    /**
      * @brief File operation types matching kernel definitions
      */
     enum class FileOperationType : ULONG {
@@ -47,51 +38,6 @@ namespace CryptoShield {
         Delete = 3,
         Rename = 4,
         SetInformation = 5
-    };
-
-    /**
-     * @brief Filter message structure (must match kernel structure)
-     */
-#pragma pack(push, 1)
-    struct FilterMessage {
-        FILTER_MESSAGE_HEADER header;
-        ULONG message_type;
-        ULONG process_id;
-        ULONG thread_id;
-        LARGE_INTEGER timestamp;
-        ULONG operation_type;
-        USHORT file_path_length;
-        WCHAR file_path[520];  // MAX_PATH * 2
-    };
-
-    /**
-     * @brief Filter reply structure
-     */
-    struct FilterReply {
-        FILTER_REPLY_HEADER header;
-        NTSTATUS status;
-        BOOLEAN allow_operation;
-    };
-#pragma pack(pop)
-
-    /**
-     * @brief Configuration update structure
-     */
-    struct ConfigUpdate {
-        FilterMessage header;
-        BOOLEAN monitoring_enabled;
-        ULONG detection_sensitivity;
-    };
-
-    /**
-     * @brief Status reply structure
-     */
-    struct StatusReply {
-        BOOLEAN monitoring_enabled;
-        ULONG detection_sensitivity;
-        ULONG file_operation_count;
-        ULONG messages_sent;
-        ULONG messages_received;
     };
 
     /**
@@ -148,14 +94,14 @@ namespace CryptoShield {
          * @param detection_sensitivity Detection sensitivity (0-100)
          * @return true on success
          */
-        bool UpdateConfiguration(bool monitoring_enabled, ULONG detection_sensitivity);
+        bool UpdateConfiguration(ULONG new_config_flags, ULONG new_detection_sensitivity, ULONG new_response_actions);
 
         /**
          * @brief Request status from driver
          * @param status Output status structure
          * @return true on success
          */
-        bool RequestStatus(StatusReply& status);
+        bool RequestStatus(CS_STATUS_REPLY_PAYLOAD& status_reply_data);
 
         /**
          * @brief Send shutdown request to driver
@@ -197,7 +143,7 @@ namespace CryptoShield {
          * @brief Process received message
          * @param message Message from driver
          */
-        void ProcessMessage(const FilterMessage& message);
+        void ProcessMessage(const CS_FILE_OPERATION_PAYLOAD& operation);
 
         /**
          * @brief Send message to driver
@@ -207,11 +153,13 @@ namespace CryptoShield {
          * @param timeout_ms Timeout in milliseconds
          * @return true on success
          */
-        bool SendMessage(const void* message,
-            size_t message_size,
-            void* reply = nullptr,
-            size_t reply_size = 0,
-            DWORD timeout_ms = 1000);
+        bool SendMessage(
+            const void* message_payload,      // Pointer to the CS_..._PAYLOAD structure
+            DWORD message_payload_size,       // Size of the CS..._PAYLOAD structure (changed from size_t)
+            LPVOID reply_buffer,              // Buffer for the reply (FILTER_REPLY_HEADER + CS_..._REPLY_PAYLOAD)
+            DWORD reply_buffer_size,          // Size of the reply_buffer (changed from size_t)
+            LPDWORD out_bytes_returned,       // Receives the actual number of bytes written to reply_buffer
+            DWORD timeout_ms);
 
         /**
          * @brief Handle connection loss
@@ -258,7 +206,7 @@ namespace CryptoShield {
         FileOperationType type;
         ULONG process_id;
         ULONG thread_id;
-        std::wstring file_path;
+        WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
         FILETIME timestamp;
 
         /**
