@@ -181,3 +181,4 @@ $RECYCLE.BIN/
 # Driver/CryptoShield/x64/
 # Pero las reglas genéricas suelen ser más fáciles de mantener.
 /DebugView.zip
+/DebugView
