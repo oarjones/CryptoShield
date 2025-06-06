@@ -334,7 +334,7 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread started");
 
     // Main service loop
-    DWORD last_stats_time = GetTickCount();
+    DWORD last_stats_time = GetTickCount64();
     while (g_running) {
         if (!g_paused) {
             // Check connection status
@@ -352,7 +352,7 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
             }
 
             // Log statistics every minute
-            DWORD current_time = GetTickCount();
+            DWORD current_time = GetTickCount64();
             if (current_time - last_stats_time > 60000) {
                 auto stats = message_processor->GetStatistics();
                 std::wstring stats_msg = L"Statistics - Total operations: " +
