@@ -203,54 +203,62 @@ static NTSTATUS HandleStatusRequestMessage(
     _Out_ PULONG ActualOutputLength
 )
 {
-    PCS_STATUS_REPLY_PAYLOAD statusReply; // De Shared.h
+    PCS_STATUS_REPLY_PAYLOAD statusReply;
     KIRQL oldIrqlCfg, oldIrqlStats;
+    // Usamos una variable local para poder imprimir su valor fácilmente.
+    size_t sizeOfPayload = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
     PAGED_CODE();
 
-    if (OutputBuffer == NULL || OutputBufferLength < sizeof(CS_STATUS_REPLY_PAYLOAD)) {
-        CS_LOG_ERROR("Output buffer too small for status reply. Needed: %u, Available: %u",
-            (ULONG)sizeof(CS_STATUS_REPLY_PAYLOAD), OutputBufferLength);
-        *ActualOutputLength = 0; // Indicar que no se escribió nada.
+    // --- INICIO DE LOGS DE DIAGNÓSTICO ---
+    CS_LOG_INFO("--- Status Request: Diagnostic Start ---");
+    CS_LOG_INFO("Driver received request. OutputBufferLength from service = %lu.", OutputBufferLength);
+    CS_LOG_INFO("Driver's compile-time sizeof(CS_STATUS_REPLY_PAYLOAD) = %lu.", (ULONG)sizeOfPayload);
+    // --- FIN DE LOGS DE DIAGNÓSTICO ---
+
+    if (OutputBuffer == NULL || OutputBufferLength < sizeOfPayload) {
+        CS_LOG_ERROR("Output buffer is smaller than driver's expected size. Needed: %lu, Available: %lu.",
+            (ULONG)sizeOfPayload, OutputBufferLength);
+        *ActualOutputLength = 0;
         return STATUS_BUFFER_TOO_SMALL;
     }
 
     statusReply = (PCS_STATUS_REPLY_PAYLOAD)OutputBuffer;
-    RtlZeroMemory(statusReply, sizeof(CS_STATUS_REPLY_PAYLOAD));
+    RtlZeroMemory(statusReply, sizeOfPayload);
 
-    // Rellenar la cabecera del payload de respuesta
-    statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST; // O un MSG_TYPE_STATUS_REPLY si se prefiere
-    // statusReply->Header.MessageId = ... ; // Podría ser el MessageId de la solicitud si se pasó
-    statusReply->Header.PayloadSize = sizeof(CS_STATUS_REPLY_PAYLOAD);
+    statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST;
+    statusReply->Header.MessageId = 0;
 
-    // Rellenar información de versión
+    // Asignamos el valor desde nuestra variable local.
+    statusReply->Header.PayloadSize = (ULONG)sizeOfPayload;
+
+    // --- INICIO DE LOGS DE DIAGNÓSTICO ---
+    // Verificamos el valor inmediatamente después de asignarlo.
+    CS_LOG_INFO("Driver assigned statusReply->Header.PayloadSize = %lu.", statusReply->Header.PayloadSize);
+    // --- FIN DE LOGS DE DIAGNÓSTICO ---
+
+    // Rellenar el resto de la estructura...
     statusReply->DriverVersionMajor = CRYPTOSHIELD_VERSION_MAJOR;
     statusReply->DriverVersionMinor = CRYPTOSHIELD_VERSION_MINOR;
     statusReply->DriverVersionBuild = CRYPTOSHIELD_VERSION_BUILD;
     statusReply->DriverLoadTime = g_Context.DriverLoadTime;
 
-    // Obtener configuración (protegida por spinlock)
     KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrqlCfg);
     statusReply->CurrentConfigFlags = g_Context.ActiveConfigFlags;
     statusReply->CurrentDetectionSensitivity = g_Context.DetectionSensitivity;
     KeReleaseSpinLock(&g_Context.ConfigLock, oldIrqlCfg);
 
-    // Obtener estadísticas (protegidas por spinlock)
     KeAcquireSpinLock(&g_Context.StatisticsLock, &oldIrqlStats);
     statusReply->TotalOperationsMonitored = g_Context.FileOperationsMonitored;
     statusReply->OperationsBlocked = g_Context.OperationsBlockedByDriver;
     statusReply->ThreatsDetected = g_Context.ThreatsDetectedByDriver;
-    // statusReply->FilesQuarantined = ... ; // Si se lleva esta cuenta
     statusReply->KernelMessagesSent = g_Context.MessagesSentToUserMode;
     statusReply->KernelMessagesReceived = g_Context.MessagesReceivedFromUserMode;
     KeReleaseSpinLock(&g_Context.StatisticsLock, oldIrqlStats);
 
-    // Rellenar otra información de estado si está disponible
-    // statusReply->MonitoredProcessesCount = g_Context.MonitoredProcessesCount;
-    // statusReply->DriverMemoryUsageKB = g_Context.CurrentMemoryUsageKB;
+    *ActualOutputLength = (ULONG)sizeOfPayload;
 
-    *ActualOutputLength = sizeof(CS_STATUS_REPLY_PAYLOAD);
-    CS_LOG_INFO("Status reply prepared. Monitored Ops: %lld", statusReply->TotalOperationsMonitored);
+    CS_LOG_INFO("--- Status Request: Diagnostic End. Reply prepared. ---");
 
     return STATUS_SUCCESS;
 }

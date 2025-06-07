@@ -253,6 +253,9 @@ NTSTATUS InstanceSetupCallback(
     _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
 )
 {
+
+    CS_LOG_INFO("Enter in InstanceSetupCallback");
+
     PAGED_CODE();
     UNREFERENCED_PARAMETER(FltObjects); // Usar si se necesita info del volumen/instancia
     UNREFERENCED_PARAMETER(Flags);      // Usar para FLTFL_INSTANCE_SETUP_FLAGS

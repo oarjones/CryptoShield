@@ -329,6 +329,8 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     ULONG initial_config_flags = CONFIG_FLAG_MONITORING_ENABLED;
     ULONG initial_sensitivity = 50;
     ULONG initial_response_actions = ACTION_ALLOW | ACTION_LOG_ONLY; // Example default actions
+    
+    //TODO: Descomentar
     communication_manager->UpdateConfiguration(initial_config_flags, initial_sensitivity, initial_response_actions);
 
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread started");
