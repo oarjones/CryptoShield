@@ -40,6 +40,17 @@ NTSTATUS ConnectNotifyCallback(
     PAGED_CODE(); // Esta callback se llama en PASSIVE_LEVEL.
 
     UNREFERENCED_PARAMETER(ServerPortCookie);
+    
+    
+    if (ConnectionContext == NULL || SizeOfContext != sizeof(ULONG)) {
+        // Rechazar conexión si no envía un PID válido.
+        return STATUS_INVALID_PARAMETER;
+    }
+    g_Context.UserModeProcessId = *(PULONG)ConnectionContext;
+    CS_LOG_INFO("User service connected with PID: %lu", g_Context.UserModeProcessId);
+    
+    
+    
     UNREFERENCED_PARAMETER(ConnectionContext); // Podría usarse para validar versión del cliente, etc.
     UNREFERENCED_PARAMETER(SizeOfContext);
 
@@ -203,57 +214,53 @@ static NTSTATUS HandleStatusRequestMessage(
     _Out_ PULONG ActualOutputLength
 )
 {
-    PCS_STATUS_REPLY_PAYLOAD statusReply; // De Shared.h
+    PCS_STATUS_REPLY_PAYLOAD statusReply;
     KIRQL oldIrqlCfg, oldIrqlStats;
 
     PAGED_CODE();
 
+    // 1. Comprobar que el buffer del servicio es suficientemente grande.
     if (OutputBuffer == NULL || OutputBufferLength < sizeof(CS_STATUS_REPLY_PAYLOAD)) {
-        CS_LOG_ERROR("Output buffer too small for status reply. Needed: %u, Available: %u",
-            (ULONG)sizeof(CS_STATUS_REPLY_PAYLOAD), OutputBufferLength);
-        *ActualOutputLength = 0; // Indicar que no se escribió nada.
+        *ActualOutputLength = 0;
         return STATUS_BUFFER_TOO_SMALL;
     }
 
+    // 2. Preparar el buffer de respuesta.
     statusReply = (PCS_STATUS_REPLY_PAYLOAD)OutputBuffer;
     RtlZeroMemory(statusReply, sizeof(CS_STATUS_REPLY_PAYLOAD));
 
-    // Rellenar la cabecera del payload de respuesta
-    statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST; // O un MSG_TYPE_STATUS_REPLY si se prefiere
-    // statusReply->Header.MessageId = ... ; // Podría ser el MessageId de la solicitud si se pasó
+    // 3. Rellenar la cabecera. ESTA ES LA PARTE CLAVE.
+    // Nos aseguramos de que el tamaño sea el correcto de la estructura completa.
+    statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST;
+    statusReply->Header.MessageId = 0;
     statusReply->Header.PayloadSize = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
-    // Rellenar información de versión
+    // 4. Rellenar el resto de los datos del estado del driver.
     statusReply->DriverVersionMajor = CRYPTOSHIELD_VERSION_MAJOR;
     statusReply->DriverVersionMinor = CRYPTOSHIELD_VERSION_MINOR;
     statusReply->DriverVersionBuild = CRYPTOSHIELD_VERSION_BUILD;
     statusReply->DriverLoadTime = g_Context.DriverLoadTime;
 
-    // Obtener configuración (protegida por spinlock)
     KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrqlCfg);
     statusReply->CurrentConfigFlags = g_Context.ActiveConfigFlags;
     statusReply->CurrentDetectionSensitivity = g_Context.DetectionSensitivity;
     KeReleaseSpinLock(&g_Context.ConfigLock, oldIrqlCfg);
 
-    // Obtener estadísticas (protegidas por spinlock)
     KeAcquireSpinLock(&g_Context.StatisticsLock, &oldIrqlStats);
     statusReply->TotalOperationsMonitored = g_Context.FileOperationsMonitored;
     statusReply->OperationsBlocked = g_Context.OperationsBlockedByDriver;
     statusReply->ThreatsDetected = g_Context.ThreatsDetectedByDriver;
-    // statusReply->FilesQuarantined = ... ; // Si se lleva esta cuenta
     statusReply->KernelMessagesSent = g_Context.MessagesSentToUserMode;
     statusReply->KernelMessagesReceived = g_Context.MessagesReceivedFromUserMode;
     KeReleaseSpinLock(&g_Context.StatisticsLock, oldIrqlStats);
 
-    // Rellenar otra información de estado si está disponible
-    // statusReply->MonitoredProcessesCount = g_Context.MonitoredProcessesCount;
-    // statusReply->DriverMemoryUsageKB = g_Context.CurrentMemoryUsageKB;
-
+    // 5. Indicar al sistema el tamaño exacto de la respuesta que hemos escrito.
     *ActualOutputLength = sizeof(CS_STATUS_REPLY_PAYLOAD);
-    CS_LOG_INFO("Status reply prepared. Monitored Ops: %lld", statusReply->TotalOperationsMonitored);
 
     return STATUS_SUCCESS;
 }
+
+
 
 static NTSTATUS HandleConfigUpdateMessage(
     _In_ PCS_CONFIG_UPDATE_PAYLOAD ConfigUpdatePayload, // De Shared.h

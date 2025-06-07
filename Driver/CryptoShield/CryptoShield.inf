@@ -1,19 +1,19 @@
 ;
-; CryptoShield.inf (Revisado nuevamente)
+; CryptoShield.inf (Versión Definitiva)
 ;
 
 [Version]
 Signature   = "$WINDOWS NT$"
-Class       = "AntiVirus" ; CORREGIDO: Nombre de clase estándar para este GUID
-ClassGuid   = {b1d1a169-c54f-4379-81db-bee7d88d7454} ; GUID Estándar para FSFilterAntiVirus
+Class       = "ActivityMonitor"
+ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
 Provider    = %ManufacturerName%
 CatalogFile = CryptoShield.cat
-DriverVer   = 06/06/2025,1.0.0.4 ; Actualiza la versión según tus cambios
+DriverVer   = 06/07/2025,1.0.1.0
 PnpLockdown = 1
 
 [DestinationDirs]
-DefaultDestDir              = 12 ; DIRID_DRIVERS -> %SystemRoot%\System32\drivers
-CryptoShield.DriverFiles    = 12 ; Los archivos en esta sección se copiarán a System32\drivers
+DefaultDestDir         = 12 ; DIRID_DRIVERS
+CryptoShield.DriverFiles = 12
 
 [SourceDisksNames]
 1 = %DiskName%,,,""
@@ -21,49 +21,38 @@ CryptoShield.DriverFiles    = 12 ; Los archivos en esta sección se copiarán a Sy
 [SourceDisksFiles]
 CryptoShield.sys = 1,,
 
-;*****************************************
-; Default Install Section for AMD64 (x64)
-;*****************************************
-[DefaultInstall.NTamd64] ; CORREGIDO: Decoración de arquitectura añadida
-OptionDesc          = %CryptoShield.SvcDesc%
-CopyFiles           = CryptoShield.DriverFiles ; Especifica la sección que lista los archivos a copiar
+; =================== Install Section ===================
+[DefaultInstall.NTamd64]
+CopyFiles = CryptoShield.DriverFiles
+AddReg    = CryptoShield.Registry
 
-[DefaultInstall.NTamd64.Services] ; CORREGIDO: Decoración de arquitectura añadida
-AddService          = CryptoShield,,CryptoShield.ServiceInstallSection ; Añade el servicio
+[DefaultInstall.NTamd64.Services]
+AddService = CryptoShield,,CryptoShield.ServiceInstall
 
-;*****************************************
-; File Copy List
-;*****************************************
+; =================== File Copy List ===================
 [CryptoShield.DriverFiles]
-CryptoShield.sys,,,0x00000040 ; COPYFLG_NOPRUNE - Copia el archivo
+CryptoShield.sys
 
-;*****************************************
-; Service Installation Section
-;*****************************************
-[CryptoShield.ServiceInstallSection]
-DisplayName         = %CryptoShield.SvcDesc%
-Description         = %CryptoShield.SvcDescLong%
-ServiceType         = 2   ; SERVICE_FILE_SYSTEM_DRIVER (Tipo correcto para minifiltros)
-StartType           = 3   ; SERVICE_DEMAND_START (Para pruebas. Cambiar a 1 para SYSTEM_START para producción/uso normal)
-ErrorControl        = 1   ; SERVICE_ERROR_NORMAL
-ServiceBinary       = %12%\CryptoShield.sys ; %12% es la ruta a System32\drivers
-LoadOrderGroup      = "FSFilter Anti-Virus" ; Debe coincidir con el rango de altitud elegido
-AddReg              = CryptoShield.AddReg.MiniFilterInstance ; Sección para añadir claves de Registro del minifiltro
+; =================== Service & Minifilter Registry ===================
+[CryptoShield.ServiceInstall]
+DisplayName      = %CryptoShield.SvcDesc%
+Description      = %CryptoShield.SvcDescLong%
+ServiceType      = 2  ; SERVICE_FILE_SYSTEM_DRIVER
+StartType        = 3  ; SERVICE_DEMAND_START
+ErrorControl     = 1  ; SERVICE_ERROR_NORMAL
+ServiceBinary    = %12%\CryptoShield.sys
+LoadOrderGroup   = "FSFilter Activity Monitor"
 
-;*****************************************
-; Minifilter Instance Registration
-;*****************************************
-[CryptoShield.AddReg.MiniFilterInstance]
-HKR,"Instances","DefaultInstance",0x00000000,%CryptoShield.DefaultInstanceName%
-; IMPORTANTE: Elige una altitud ÚNICA y APROPIADA para tu tipo de filtro.
-; "328000" es un EJEMPLO para el grupo "FSFilter Anti-Virus" (rango 320000-329999).
-; Consulta la documentación de Microsoft: "Load Order Groups and Altitudes for Minifilter Drivers".
-HKR,"Instances\"%CryptoShield.DefaultInstanceName%,"Altitude",0x00000000,"328000"
-HKR,"Instances\"%CryptoShield.DefaultInstanceName%","Flags",0x00010001,0x0 ; Flags de ejemplo
+[CryptoShield.Registry]
+; Usamos rutas absolutas (HKLM) para máxima compatibilidad y evitar errores de interpretación.
+HKLM,"SYSTEM\CurrentControlSet\Services\CryptoShield\Instances","DefaultInstance",0x00000000,%CryptoShield.DefaultInstanceName%
+HKLM,"SYSTEM\CurrentControlSet\Services\CryptoShield\Instances\%CryptoShield.DefaultInstanceName%","Altitude",0x00000000,"370010"
+HKLM,"SYSTEM\CurrentControlSet\Services\CryptoShield\Instances\%CryptoShield.DefaultInstanceName%","Flags",0x00010000,0x0
 
+; =================== Strings ===================
 [Strings]
-ManufacturerName            = "Tu Nombre o Compañía" ; TODO: Reemplaza esto
-DiskName                    = "CryptoShield Installation Media"
-CryptoShield.SvcDesc        = "CryptoShield Minifilter"
-CryptoShield.SvcDescLong    = "CryptoShield Minifilter Driver for file system activity monitoring."
-CryptoShield.DefaultInstanceName = "CryptoShield-Instance" ; Nombre para tu instancia de filtro
+ManufacturerName               = "CryptoShield Project"
+DiskName                       = "CryptoShield Installation Media"
+CryptoShield.SvcDesc           = "CryptoShield Activity Monitor Driver"
+CryptoShield.SvcDescLong       = "Monitors file system activity to detect suspicious patterns."
+CryptoShield.DefaultInstanceName = "CryptoShield-Instance"

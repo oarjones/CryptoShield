@@ -59,6 +59,7 @@ typedef struct _CRYPTOSHIELD_CONTEXT {
     LARGE_INTEGER DriverLoadTime;   // Momento en que el driver fue cargado
     // ULONG MonitoredProcessesCount; // Si se lleva cuenta de procesos específicos
     // ULONG CurrentMemoryUsageKB;  // Si se monitorea el uso de memoria
+    ULONG UserModeProcessId; // <-- AÑADE ESTA LÍNEA
 } CRYPTOSHIELD_CONTEXT, * PCRYPTOSHIELD_CONTEXT;
 
 // Global driver context
