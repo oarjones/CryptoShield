@@ -18,6 +18,8 @@
 #include <chrono>
 #include <optional>
 #include <mutex>
+#include "EntropyAnalyzer.h"
+#include "BehavioralDetector.h"
 
 namespace CryptoShield::Detection {
 

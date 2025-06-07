@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <cmath>
 #include <numeric>
+#include <cwctype> 
 
 namespace CryptoShield::Detection {
 
@@ -644,7 +645,7 @@ namespace CryptoShield::Detection {
             // Note: Need old path from somewhere - this is simplified
             extension_monitor_->AnalyzeFileRename(
                 operation.file_path,
-                operation.file_path + L".encrypted",
+                operation.file_path + std::wstring(L".encrypted"),
                 operation.process_id
             );
         }
@@ -899,6 +900,7 @@ namespace CryptoShield::Detection {
         for (size_t i = 1; i < operations.size(); ++i) {
             auto duration = operations[i].timestamp - operations[i - 1].timestamp;
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+
             intervals.push_back(static_cast<double>(ms));
         }
 

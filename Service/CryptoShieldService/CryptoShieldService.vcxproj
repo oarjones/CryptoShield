@@ -140,7 +140,10 @@
   <ItemGroup>
     <ClInclude Include="CommunicationManager.h" />
     <ClInclude Include="Detection\BehavioralDetector.h" />
+    <ClInclude Include="Detection\DetectionConfig.h" />
     <ClInclude Include="Detection\EntropyAnalyzer.h" />
+    <ClInclude Include="Detection\FalsePositiveMinimizer.h" />
+    <ClInclude Include="Detection\PatternDatabase.h" />
     <ClInclude Include="Detection\ScoringEngine.h" />
     <ClInclude Include="Detection\SystemActivityMonitor.h" />
     <ClInclude Include="Detection\TraditionalEngine.h" />
@@ -149,7 +152,10 @@
   <ItemGroup>
     <ClCompile Include="CommunicationManager.cpp" />
     <ClCompile Include="Detection\BehavioralDetector.cpp" />
+    <ClCompile Include="Detection\DetectionConfig.cpp" />
     <ClCompile Include="Detection\EntropyAnalyzer.cpp" />
+    <ClCompile Include="Detection\FalsePositiveMinimizer.cpp" />
+    <ClCompile Include="Detection\PatternDatabase.cpp" />
     <ClCompile Include="Detection\ScoringEngine.cpp" />
     <ClCompile Include="Detection\SystemActivityMonitor.cpp" />
     <ClCompile Include="Detection\TraditionalEngine.cpp" />

@@ -36,6 +36,15 @@
     <ClInclude Include="Detection\ScoringEngine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Detection\PatternDatabase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Detection\FalsePositiveMinimizer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Detection\DetectionConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CommunicationManager.cpp">
@@ -60,6 +69,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Detection\ScoringEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Detection\PatternDatabase.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Detection\FalsePositiveMinimizer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Detection\DetectionConfig.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
