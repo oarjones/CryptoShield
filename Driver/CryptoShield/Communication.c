@@ -40,6 +40,17 @@ NTSTATUS ConnectNotifyCallback(
     PAGED_CODE(); // Esta callback se llama en PASSIVE_LEVEL.
 
     UNREFERENCED_PARAMETER(ServerPortCookie);
+    
+    
+    if (ConnectionContext == NULL || SizeOfContext != sizeof(ULONG)) {
+        // Rechazar conexión si no envía un PID válido.
+        return STATUS_INVALID_PARAMETER;
+    }
+    g_Context.UserModeProcessId = *(PULONG)ConnectionContext;
+    CS_LOG_INFO("User service connected with PID: %lu", g_Context.UserModeProcessId);
+    
+    
+    
     UNREFERENCED_PARAMETER(ConnectionContext); // Podría usarse para validar versión del cliente, etc.
     UNREFERENCED_PARAMETER(SizeOfContext);
 
@@ -205,39 +216,26 @@ static NTSTATUS HandleStatusRequestMessage(
 {
     PCS_STATUS_REPLY_PAYLOAD statusReply;
     KIRQL oldIrqlCfg, oldIrqlStats;
-    // Usamos una variable local para poder imprimir su valor fácilmente.
-    size_t sizeOfPayload = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
     PAGED_CODE();
 
-    // --- INICIO DE LOGS DE DIAGNÓSTICO ---
-    CS_LOG_INFO("--- Status Request: Diagnostic Start ---");
-    CS_LOG_INFO("Driver received request. OutputBufferLength from service = %lu.", OutputBufferLength);
-    CS_LOG_INFO("Driver's compile-time sizeof(CS_STATUS_REPLY_PAYLOAD) = %lu.", (ULONG)sizeOfPayload);
-    // --- FIN DE LOGS DE DIAGNÓSTICO ---
-
-    if (OutputBuffer == NULL || OutputBufferLength < sizeOfPayload) {
-        CS_LOG_ERROR("Output buffer is smaller than driver's expected size. Needed: %lu, Available: %lu.",
-            (ULONG)sizeOfPayload, OutputBufferLength);
+    // 1. Comprobar que el buffer del servicio es suficientemente grande.
+    if (OutputBuffer == NULL || OutputBufferLength < sizeof(CS_STATUS_REPLY_PAYLOAD)) {
         *ActualOutputLength = 0;
         return STATUS_BUFFER_TOO_SMALL;
     }
 
+    // 2. Preparar el buffer de respuesta.
     statusReply = (PCS_STATUS_REPLY_PAYLOAD)OutputBuffer;
-    RtlZeroMemory(statusReply, sizeOfPayload);
+    RtlZeroMemory(statusReply, sizeof(CS_STATUS_REPLY_PAYLOAD));
 
+    // 3. Rellenar la cabecera. ESTA ES LA PARTE CLAVE.
+    // Nos aseguramos de que el tamaño sea el correcto de la estructura completa.
     statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST;
     statusReply->Header.MessageId = 0;
+    statusReply->Header.PayloadSize = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
-    // Asignamos el valor desde nuestra variable local.
-    statusReply->Header.PayloadSize = (ULONG)sizeOfPayload;
-
-    // --- INICIO DE LOGS DE DIAGNÓSTICO ---
-    // Verificamos el valor inmediatamente después de asignarlo.
-    CS_LOG_INFO("Driver assigned statusReply->Header.PayloadSize = %lu.", statusReply->Header.PayloadSize);
-    // --- FIN DE LOGS DE DIAGNÓSTICO ---
-
-    // Rellenar el resto de la estructura...
+    // 4. Rellenar el resto de los datos del estado del driver.
     statusReply->DriverVersionMajor = CRYPTOSHIELD_VERSION_MAJOR;
     statusReply->DriverVersionMinor = CRYPTOSHIELD_VERSION_MINOR;
     statusReply->DriverVersionBuild = CRYPTOSHIELD_VERSION_BUILD;
@@ -256,12 +254,13 @@ static NTSTATUS HandleStatusRequestMessage(
     statusReply->KernelMessagesReceived = g_Context.MessagesReceivedFromUserMode;
     KeReleaseSpinLock(&g_Context.StatisticsLock, oldIrqlStats);
 
-    *ActualOutputLength = (ULONG)sizeOfPayload;
-
-    CS_LOG_INFO("--- Status Request: Diagnostic End. Reply prepared. ---");
+    // 5. Indicar al sistema el tamaño exacto de la respuesta que hemos escrito.
+    *ActualOutputLength = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
     return STATUS_SUCCESS;
 }
+
+
 
 static NTSTATUS HandleConfigUpdateMessage(
     _In_ PCS_CONFIG_UPDATE_PAYLOAD ConfigUpdatePayload, // De Shared.h

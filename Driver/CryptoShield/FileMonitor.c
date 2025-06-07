@@ -114,6 +114,13 @@ FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
     UNREFERENCED_PARAMETER(CompletionContext); // Inicialmente no se usa contexto para post-op
     *CompletionContext = NULL;
 
+    
+    // Si la operación viene de nuestro propio servicio, la ignoramos.
+    if (FltGetRequestorProcessId(Data) == g_Context.UserModeProcessId) {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+    
+
     // Comprobar si el driver se está descargando o si el monitoreo está deshabilitado.
     if (g_Context.IsUnloading || !g_Context.MonitoringEnabled) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK; // No hacer nada

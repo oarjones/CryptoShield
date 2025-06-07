@@ -49,6 +49,9 @@ namespace CryptoShield {
 			return false;
 		}
 
+		
+		DWORD processId = GetCurrentProcessId();
+
 		port_name_ = port_name;
 
 		// Create completion port for async operations
@@ -58,13 +61,13 @@ namespace CryptoShield {
 			return false;
 		}
 
-		// Connect to filter port
+		// Connect to filter port		
 		HRESULT hr = FilterConnectCommunicationPort(
 			port_name_.c_str(),
-			0,                          // Options
-			nullptr,                    // Context
-			0,                          // Context size
-			nullptr,                    // Security attributes
+			0,                          // Opciones
+			&processId,                 // <-- MODIFICA ESTA LÍNEA (Contexto: pasamos el PID)
+			sizeof(processId),          // <-- MODIFICA ESTA LÍNEA (Tamaño del contexto)
+			nullptr,                    // Atributos de seguridad
 			&filter_port_
 		);
 
