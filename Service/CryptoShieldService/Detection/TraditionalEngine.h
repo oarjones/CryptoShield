@@ -20,7 +20,7 @@
 namespace CryptoShield::Detection {
 
     // Forward declarations
-    class EntropyAnalyzer;
+    class AdvancedEntropyAnalysis;
     class BehavioralDetector;
     class SystemActivityMonitor;
     class ScoringEngine;
@@ -103,6 +103,15 @@ namespace CryptoShield::Detection {
         bool enable_detailed_logging;
     };
 
+
+    // Añade esta nueva estructura, puede estar fuera o dentro de la clase TraditionalEngine
+    struct EngineStatsData {
+        size_t operations_analyzed;
+        size_t threats_detected;
+        size_t false_positives_prevented;
+        double average_analysis_time_ms;
+        double average_confidence_score;
+    };
     /**
      * @brief Traditional detection engine main class
      * @details Coordinates all detection components for comprehensive analysis
@@ -167,7 +176,8 @@ namespace CryptoShield::Detection {
             std::chrono::steady_clock::time_point engine_start_time;
         };
 
-        Statistics GetStatistics() const;
+        //Statistics GetStatistics() const;
+        EngineStatsData GetStatistics() const;
 
         /**
          * @brief Get default engine configuration
@@ -243,7 +253,7 @@ namespace CryptoShield::Detection {
         EngineConfig config_;
 
         // Detection components
-        std::unique_ptr<EntropyAnalyzer> entropy_analyzer_;
+        std::unique_ptr<AdvancedEntropyAnalysis> entropy_analyzer_;
         std::unique_ptr<BehavioralDetector> behavioral_detector_;
         std::unique_ptr<SystemActivityMonitor> system_monitor_;
         std::unique_ptr<ScoringEngine> scoring_engine_;

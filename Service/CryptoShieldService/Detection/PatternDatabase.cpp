@@ -567,14 +567,15 @@ namespace CryptoShield::Detection {
                 auto& patterns_array = j["patterns"];
                 for (const auto& [id, pattern] : patterns_) {
                     nlohmann::json jp;
-                    jp["id"] = std::string(pattern.pattern_id.begin(), pattern.pattern_id.end());
+                    //jp["id"] = std::string(pattern.pattern_id.begin(), pattern.pattern_id.end());
+                    jp["id"] = pattern.pattern_id;
                     jp["type"] = static_cast<int>(pattern.type);
-                    jp["value"] = std::string(pattern.pattern_value.begin(), pattern.pattern_value.end());
+                    jp["value"] = pattern.pattern_value;
                     jp["match_mode"] = static_cast<int>(pattern.match_mode);
                     jp["confidence"] = static_cast<int>(pattern.confidence);
-                    jp["family"] = std::string(pattern.family_name.begin(), pattern.family_name.end());
-                    jp["variant"] = std::string(pattern.variant_name.begin(), pattern.variant_name.end());
-                    jp["description"] = std::string(pattern.description.begin(), pattern.description.end());
+                    jp["family"] = pattern.family_name;
+                    jp["variant"] = pattern.variant_name;
+                    jp["description"] = pattern.description;
                     jp["hit_count"] = pattern.hit_count;
                     jp["is_active"] = pattern.is_active;
                     jp["false_positive_rate"] = pattern.false_positive_rate;

@@ -458,12 +458,14 @@ namespace CryptoShield::Detection {
         std::lock_guard<std::mutex> lock(traversal_mutex_);
 
         // Extract directory
-        size_t last_slash = operation.file_path.find_last_of(L"\\");
+        //size_t last_slash = operation.file_path.find_last_of(L"\\");
+        size_t last_slash = std::wstring(operation.file_path).find_last_of(L"\\");
         if (last_slash == std::wstring::npos) {
             return;
         }
 
-        std::wstring directory = operation.file_path.substr(0, last_slash);
+        //std::wstring directory = operation.file_path.substr(0, last_slash);
+        std::wstring directory = std::wstring(operation.file_path).substr(0, last_slash);
 
         // Update process traversal info
         auto& info = process_traversals_[process_id];
@@ -831,14 +833,20 @@ namespace CryptoShield::Detection {
         }
 
         // Extract directory and extension
-        size_t last_slash = operation.file_path.find_last_of(L"\\");
+        //size_t last_slash = operation.file_path.find_last_of(L"\\");
+        size_t last_slash = std::wstring(operation.file_path).find_last_of(L"\\");
+
+
         if (last_slash != std::wstring::npos) {
-            profile.affected_directories.insert(operation.file_path.substr(0, last_slash));
+            profile.affected_directories.insert(std::wstring(operation.file_path).substr(0, last_slash));
         }
 
-        size_t last_dot = operation.file_path.find_last_of(L".");
+        //size_t last_dot = operation.file_path.find_last_of(L".");
+        size_t last_dot = std::wstring(operation.file_path).find_last_of(L".");
         if (last_dot != std::wstring::npos) {
-            std::wstring extension = operation.file_path.substr(last_dot);
+            //std::wstring extension = operation.file_path.substr(last_dot);
+            std::wstring extension = std::wstring(operation.file_path).substr(last_dot);
+
             profile.affected_extensions.insert(extension);
 
             if (operation.type == FileOperationType::Create) {
@@ -898,10 +906,26 @@ namespace CryptoShield::Detection {
         // Calculate inter-operation times
         std::vector<double> intervals;
         for (size_t i = 1; i < operations.size(); ++i) {
+            /*
             auto duration = operations[i].timestamp - operations[i - 1].timestamp;
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-
             intervals.push_back(static_cast<double>(ms));
+            */
+
+            // Corregido
+            ULARGE_INTEGER time1, time2;
+            time1.LowPart = operations[i].timestamp.dwLowDateTime;
+            time1.HighPart = operations[i].timestamp.dwHighDateTime;
+            time2.LowPart = operations[i - 1].timestamp.dwLowDateTime;
+            time2.HighPart = operations[i - 1].timestamp.dwHighDateTime;
+
+            // La resta da un valor en unidades de 100-nanosegundos. Lo convertimos a milisegundos.
+            auto ms = static_cast<double>((time1.QuadPart - time2.QuadPart) / 10000.0);
+            intervals.push_back(ms);
+
+
+
+            
         }
 
         // Calculate statistics

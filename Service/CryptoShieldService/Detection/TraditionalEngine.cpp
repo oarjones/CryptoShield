@@ -10,8 +10,8 @@
 #include "EntropyAnalyzer.h"
 #include "BehavioralDetector.h"
 #include "SystemActivityMonitor.h"
-#include "ScoringEngine.h"
 #include "PatternDatabase.h"
+#include "ScoringEngine.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -70,7 +70,7 @@ namespace CryptoShield::Detection {
             system_monitor_ = std::make_unique<SystemActivityMonitor>();
 
             // Initialize scoring engine
-            ScoringEngine::WeightConfiguration weights;
+            WeightConfiguration weights;
             weights.entropy_weight = config_.entropy_weight;
             weights.behavioral_weight = config_.behavioral_weight;
             weights.system_activity_weight = config_.system_activity_weight;
@@ -119,6 +119,10 @@ namespace CryptoShield::Detection {
 
         std::wcout << L"[TraditionalEngine] Shutdown complete" << std::endl;
     }
+
+
+    
+
 
     /**
      * @brief Analyze a file operation
@@ -268,7 +272,7 @@ namespace CryptoShield::Detection {
 
         // Update component configurations
         if (scoring_engine_) {
-            ScoringEngine::WeightConfiguration weights;
+            WeightConfiguration weights;
             weights.entropy_weight = config.entropy_weight;
             weights.behavioral_weight = config.behavioral_weight;
             weights.system_activity_weight = config.system_activity_weight;
@@ -288,15 +292,33 @@ namespace CryptoShield::Detection {
     /**
      * @brief Get engine statistics
      */
-    TraditionalEngine::Statistics TraditionalEngine::GetStatistics() const
+    /*TraditionalEngine::Statistics TraditionalEngine::GetStatistics() const
     {
         return statistics_;
+    }*/
+
+    EngineStatsData TraditionalEngine::GetStatistics() const
+    {
+        EngineStatsData data;
+        // Carga los valores de forma atómica. El .load() es opcional para tipos simples
+        // pero es una buena práctica para claridad.
+        data.operations_analyzed = statistics_.operations_analyzed.load();
+        data.threats_detected = statistics_.threats_detected.load();
+        data.false_positives_prevented = statistics_.false_positives_prevented.load();
+
+        // Los double no son atómicos, así que deben protegerse con un mutex si se
+        // modifican desde múltiples hilos, o asegurarse de que solo un hilo los escribe.
+        // Asumiendo que están protegidos, los copiamos directamente.
+        data.average_analysis_time_ms = statistics_.average_analysis_time_ms;
+        data.average_confidence_score = statistics_.average_confidence_score;
+
+        return data;
     }
 
     /**
      * @brief Get default engine configuration
      */
-    TraditionalEngine::EngineConfig TraditionalEngine::GetDefaultConfig()
+    EngineConfig TraditionalEngine::GetDefaultConfig()
     {
         EngineConfig config;
 
@@ -325,7 +347,7 @@ namespace CryptoShield::Detection {
     /**
      * @brief Load configuration from file
      */
-    TraditionalEngine::EngineConfig TraditionalEngine::LoadConfiguration(const std::wstring& config_file)
+    EngineConfig TraditionalEngine::LoadConfiguration(const std::wstring& config_file)
     {
         try {
             std::ifstream file(config_file);
@@ -395,8 +417,10 @@ namespace CryptoShield::Detection {
         FileType file_type = FileTypeDetector::DetectFileType(operation.file_path);
 
         // Get adaptive threshold
-        auto analyzer = entropy_analyzer_->shannon_analyzer_.get();
-        double threshold = analyzer->GetAdaptiveThreshold(file_type);
+        /*auto analyzer = entropy_analyzer_->shannon_analyzer_.get();
+        double threshold = analyzer->GetAdaptiveThreshold(file_type);*/
+
+        double threshold = entropy_analyzer_->GetAdaptiveThreshold(file_type);
 
         // Calculate suspicion based on entropy change
         double entropy_delta = std::abs(operation.entropy_after - operation.entropy_before);
@@ -429,7 +453,8 @@ namespace CryptoShield::Detection {
         for (const auto& op : operations) {
             CryptoShield::FileOperationInfo info;
             info.process_id = op.process_id;
-            info.file_path = op.file_path;
+            //info.file_path = op.file_path;
+            wcscpy_s(info.file_path, MAX_FILE_PATH_CHARS, op.file_path.c_str());
             info.type = static_cast<CryptoShield::FileOperationType>(op.operation_type);
 
             // Convert timestamp
@@ -498,9 +523,18 @@ namespace CryptoShield::Detection {
 
         // Set threat name based on pattern matching
         if (result.is_threat && pattern_database_) {
-            result.primary_threat_name = pattern_database_->MatchPattern(
+            /*result.primary_threat_name = pattern_database_->MatchPattern(
                 result.contributing_factors
-            );
+            );*/
+
+            for (const auto& factor : result.contributing_factors) {
+                auto matches = pattern_database_->MatchAllTypes(factor);
+                if (!matches.empty()) {
+                    result.primary_threat_name = matches[0].family_name;
+                    break; // Nos quedamos con la primera familia de amenaza encontrada
+                }
+            }
+
         }
 
         return result;

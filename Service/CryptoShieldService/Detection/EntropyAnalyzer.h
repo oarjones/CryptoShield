@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <cmath>
+#include <unordered_map>
 
 namespace CryptoShield::Detection {
 
@@ -218,6 +219,16 @@ namespace CryptoShield::Detection {
          */
         EntropyAnalysisResult PerformComprehensiveAnalysis(const std::vector<uint8_t>& data,
             FileType file_type);
+
+
+        // Este método delega la llamada al miembro privado de forma segura
+        double GetAdaptiveThreshold(FileType file_type) const {
+            if (shannon_analyzer_) {
+                return shannon_analyzer_->GetAdaptiveThreshold(file_type);
+            }
+            // Devuelve un valor por defecto muy alto si el analizador no existe
+            return 8.0;
+        }
 
     private:
         /**

@@ -251,10 +251,11 @@ namespace CryptoShield::Detection {
             j["global"]["enable_logging"] = current_config_.global.enable_logging;
             j["global"]["enable_telemetry"] = current_config_.global.enable_telemetry;
             j["global"]["debug_mode"] = current_config_.global.debug_mode;
-            j["global"]["log_directory"] = std::string(
+            /*j["global"]["log_directory"] = std::string(
                 current_config_.global.log_directory.begin(),
                 current_config_.global.log_directory.end()
-            );
+            );*/
+            j["global"]["log_directory"] = current_config_.global.log_directory;
             j["global"]["max_log_size_mb"] = current_config_.global.max_log_size_mb;
             j["global"]["log_retention_days"] = current_config_.global.log_retention_days;
             j["global"]["thread_pool_size"] = current_config_.global.thread_pool_size;
@@ -291,7 +292,8 @@ namespace CryptoShield::Detection {
             // Save suspicious extensions
             auto& exts = j["behavioral_detection"]["suspicious_extensions"];
             for (const auto& ext : current_config_.behavioral.suspicious_extensions) {
-                exts.push_back(std::string(ext.begin(), ext.end()));
+                //exts.push_back(std::string(ext.begin(), ext.end()));
+                exts.push_back(ext);
             }
 
             // Save system monitoring configuration
@@ -322,10 +324,13 @@ namespace CryptoShield::Detection {
 
             // Save pattern database configuration
             j["pattern_database"]["enabled"] = current_config_.pattern_database.enabled;
-            j["pattern_database"]["database_file"] = std::string(
+            /*j["pattern_database"]["database_file"] = std::string(
                 current_config_.pattern_database.database_file.begin(),
                 current_config_.pattern_database.database_file.end()
-            );
+            );*/
+
+            j["pattern_database"]["database_file"] = current_config_.pattern_database.database_file;
+
             j["pattern_database"]["auto_update"] = current_config_.pattern_database.auto_update;
             j["pattern_database"]["update_interval_hours"] = current_config_.pattern_database.update_interval_hours;
             j["pattern_database"]["enable_custom_patterns"] = current_config_.pattern_database.enable_custom_patterns;

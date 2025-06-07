@@ -370,7 +370,8 @@ namespace CryptoShield::Detection {
         profile.most_common_byte = *max_it;
 
         // Calculate deviation from natural language distribution
-        auto& text_dist = GetReferenceDistribution(FileType::TEXT_DOCUMENT);
+        //auto& text_dist = GetReferenceDistribution(FileType::TEXT_DOCUMENT);
+        const auto& text_dist = GetReferenceDistribution(FileType::TEXT_DOCUMENT);
         profile.deviation_from_natural = CalculateKLDivergence(data, text_dist);
 
         return profile;

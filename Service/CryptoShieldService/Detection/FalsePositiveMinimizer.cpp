@@ -552,12 +552,15 @@ namespace CryptoShield::Detection {
             std::wstring ext = std::filesystem::path(op.file_path).extension().wstring();
 
             switch (op.operation_type) {
-            case FileOperationType::Create:
-            case FileOperationType::Write:
+            //case FileOperationType::Create:
+            case static_cast<ULONG>(FileOperationType::Create):
+            //case FileOperationType::Write:
+            case static_cast<ULONG>(FileOperationType::Write):
                 write_count++;
                 write_extensions.insert(ext);
                 break;
-            case FileOperationType::Delete:
+            //case FileOperationType::Delete:
+            case static_cast<ULONG>(FileOperationType::Delete):
                 delete_count++;
                 break;
             default:
@@ -619,7 +622,7 @@ namespace CryptoShield::Detection {
             std::wstring ext = std::filesystem::path(op.file_path).extension().wstring();
 
             // Check for archive creation
-            if ((op.operation_type == FileOperationType::Create || op.operation_type == FileOperationType::Write) &&
+            if ((op.operation_type == static_cast<ULONG>(FileOperationType::Create) || op.operation_type == static_cast<ULONG>(FileOperationType::Write)) &&
                 std::find(LEGITIMATE_EXTENSIONS.at(SoftwareCategory::COMPRESSION_TOOLS).begin(),
                     LEGITIMATE_EXTENSIONS.at(SoftwareCategory::COMPRESSION_TOOLS).end(),
                     ext) != LEGITIMATE_EXTENSIONS.at(SoftwareCategory::COMPRESSION_TOOLS).end()) {
@@ -717,7 +720,8 @@ namespace CryptoShield::Detection {
 
         // Reduce for new/rare processes
         auto age = std::chrono::system_clock::now() - rep.first_seen;
-        auto days = std::chrono::duration_cast<std::chrono::days>(age).count();
+        //auto days = std::chrono::duration_cast<std::chrono::days>(age).count();
+        auto days = std::chrono::duration_cast<std::chrono::hours>(age).count() / 24;
         if (days < 7) {
             base_score *= 0.8;
         }
@@ -838,10 +842,10 @@ namespace CryptoShield::Detection {
         size_t deletes = 0;
 
         for (const auto& op : operations) {
-            if (op.operation_type == FileOperationType::Rename) {
+            if (op.operation_type == static_cast<ULONG>(FileOperationType::Rename)) {
                 extension_changes++;
             }
-            else if (op.operation_type == FileOperationType::Delete) {
+            else if (op.operation_type == static_cast<ULONG>(FileOperationType::Delete)) {
                 deletes++;
             }
         }
@@ -967,6 +971,77 @@ namespace CryptoShield::Detection {
         }
 
         return false;
+    }
+
+
+	/**
+	 * @brief Check if legitimate media processing
+	 */
+    bool FalsePositiveMinimizer::IsLegitimateMediaProcessing(
+        const std::vector<FileOperation>& operations) const
+    {
+        if (operations.empty()) {
+            return false;
+        }
+
+        size_t media_file_ops = 0;
+        const auto& media_extensions = LEGITIMATE_EXTENSIONS.at(SoftwareCategory::MEDIA_ENCODERS);
+
+        for (const auto& op : operations) {
+            std::wstring ext = std::filesystem::path(op.file_path).extension().wstring();
+
+            // Comprueba si la extensión está en la lista de extensiones de medios legítimos
+            if (std::find(media_extensions.begin(), media_extensions.end(), ext) != media_extensions.end()) {
+                media_file_ops++;
+            }
+        }
+
+        // Considera la actividad como legítima si más del 70% de las operaciones son sobre archivos de medios.
+        double media_ratio = static_cast<double>(media_file_ops) / operations.size();
+
+        return media_ratio > 0.7;
+    }
+
+    /**
+	 * @brief Check if legitimate development activity
+     */
+    bool FalsePositiveMinimizer::IsLegitimateDevActivity(
+        const std::wstring& process_name,
+        const std::vector<FileOperation>& operations) const
+    {
+        // Comprueba si el nombre del proceso corresponde a una herramienta de desarrollo conocida.
+        bool is_dev_tool = false;
+        std::wstring lower_name = process_name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::towlower);
+
+        for (const auto& tool : DEVELOPMENT_SOFTWARE) {
+            std::wstring lower_tool = tool;
+            std::transform(lower_tool.begin(), lower_tool.end(), lower_tool.begin(), ::towlower);
+            if (lower_name.find(lower_tool) != std::wstring::npos) {
+                is_dev_tool = true;
+                break;
+            }
+        }
+
+        if (!is_dev_tool) {
+            return false; // Si no es una herramienta de desarrollo, no es actividad de desarrollo.
+        }
+
+        // Si es una herramienta de desarrollo, comprueba si las operaciones son sobre archivos de código/compilación.
+        size_t dev_file_ops = 0;
+        const auto& dev_extensions = LEGITIMATE_EXTENSIONS.at(SoftwareCategory::DEVELOPMENT_TOOLS);
+
+        for (const auto& op : operations) {
+            std::wstring ext = std::filesystem::path(op.file_path).extension().wstring();
+            if (std::find(dev_extensions.begin(), dev_extensions.end(), ext) != dev_extensions.end()) {
+                dev_file_ops++;
+            }
+        }
+
+        // Es actividad de desarrollo legítima si la mayoría de las operaciones son sobre archivos de desarrollo.
+        double dev_ratio = static_cast<double>(dev_file_ops) / operations.size();
+
+        return dev_ratio > 0.5;
     }
 
 } // namespace CryptoShield::Detection
