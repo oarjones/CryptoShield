@@ -182,14 +182,9 @@ namespace CryptoShield {
 		payload.NewResponseActions = new_response_actions;
 
 		// --- INICIO DE LA MODIFICACIÓN ---
-		//
-		// CAMBIO: En lugar de enviar un mensaje sin esperar respuesta (con nullptr),
-		// proporcionamos un búfer de respuesta ficticio. Esto fuerza a FilterSendMessage
-		// a usar una ruta de código interna diferente, lo que puede evitar el crash
-		// si existe un bug en el manejo de llamadas sin respuesta.
 
-		// El driver no enviará datos aquí, pero la API requiere un búfer válido.
-		// Usamos una estructura mínima que la API pueda aceptar.
+		// Código ANTIGUO con el workaround:
+		/*
 		struct DUMMY_REPLY {
 			FILTER_REPLY_HEADER Header;
 			CS_USER_REPLY_PAYLOAD Reply;
@@ -199,11 +194,26 @@ namespace CryptoShield {
 		bool result = SendMessage(
 			&payload,
 			sizeof(payload),
-			&dummy_reply,                   // 1. Pasar el búfer ficticio
-			sizeof(dummy_reply),            // 2. Pasar su tamaño
-			&bytes_returned,                // 3. Pasar un puntero para los bytes devueltos
+			&dummy_reply,
+			sizeof(dummy_reply),
+			&bytes_returned,
 			1000
 		);
+		*/
+
+		// Código NUEVO y correcto:
+		// Enviamos el mensaje sin esperar un payload de respuesta.
+		// Pasamos nullptr a los parámetros de respuesta. La función SendMessage
+		// ya está preparada para manejar este caso.
+		bool result = SendMessage(
+			&payload,
+			sizeof(payload),
+			nullptr, // No hay buffer de respuesta
+			0,       // El tamaño del buffer es 0
+			nullptr, // No necesitamos saber los bytes devueltos
+			1000
+		);
+
 		// --- FIN DE LA MODIFICACIÓN ---
 
 
@@ -531,29 +541,8 @@ namespace CryptoShield {
 		file_op_info.timestamp.dwLowDateTime = operation.Timestamp.LowPart;
 		file_op_info.timestamp.dwHighDateTime = operation.Timestamp.HighPart;
 
-		// Copy FilePath
-		// operation.FilePathLength is the number of characters, excluding NUL.
-		// file_op_info.file_path is a WCHAR array of size MAX_FILE_PATH_CHARS.
-		// wcsncpy_s with _TRUNCATE will copy at most MAX_FILE_PATH_CHARS-1 characters
-		// from operation.FilePath and null-terminate.
-		// If operation.FilePathLength is 0, it should result in an empty string.
-		if (operation.FilePathLength > 0) {
-			errno_t cpy_result = wcsncpy_s(file_op_info.file_path, MAX_FILE_PATH_CHARS, operation.FilePath, _TRUNCATE);
-			if (cpy_result == STRUNCATE) {
-				// Log that truncation occurred, though it's handled by null termination.
-				std::wcerr << L"[CommunicationManager] FilePath truncated in ProcessMessage. Original length: "
-					<< operation.FilePathLength << std::endl;
-			}
-			else if (cpy_result != 0) {
-				// Log other wcsncpy_s error
-				std::wcerr << L"[CommunicationManager] wcsncpy_s failed in ProcessMessage with error: "
-					<< cpy_result << std::endl;
-				// Potentially clear file_op_info.file_path or handle error further
-				file_op_info.file_path[0] = L'\0';
-			}
-		}
-		else {
-			file_op_info.file_path[0] = L'\0'; // Ensure empty path if length is 0
+		if (operation.FilePathLength > 0 && operation.FilePathLength < MAX_FILE_PATH_CHARS) {
+			file_op_info.file_path.assign(operation.FilePath, operation.FilePathLength);
 		}
 
 		// Retrieve the callback under lock

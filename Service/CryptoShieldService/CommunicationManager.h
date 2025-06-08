@@ -206,7 +206,8 @@ namespace CryptoShield {
         FileOperationType type;
         ULONG process_id;
         ULONG thread_id;
-        WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
+        //WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
+        std::wstring file_path;
         FILETIME timestamp;
 
         /**

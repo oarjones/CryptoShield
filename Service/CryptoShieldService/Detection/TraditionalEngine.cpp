@@ -448,25 +448,39 @@ namespace CryptoShield::Detection {
             return 0.0;
         }
 
-        // Convert to behavioral detector format
+        // Convertir al formato que espera el detector de comportamiento.
         std::vector<CryptoShield::FileOperationInfo> detector_ops;
+        detector_ops.reserve(operations.size()); // Pre-reserva memoria para eficiencia.
+
         for (const auto& op : operations) {
             CryptoShield::FileOperationInfo info;
             info.process_id = op.process_id;
-            //info.file_path = op.file_path;
-            wcscpy_s(info.file_path, MAX_FILE_PATH_CHARS, op.file_path.c_str());
             info.type = static_cast<CryptoShield::FileOperationType>(op.operation_type);
 
-            // Convert timestamp
-            auto time_since_epoch = op.timestamp.time_since_epoch();
-            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(time_since_epoch);
-            info.timestamp.dwLowDateTime = static_cast<DWORD>(seconds.count() & 0xFFFFFFFF);
-            info.timestamp.dwHighDateTime = static_cast<DWORD>((seconds.count() >> 32) & 0xFFFFFFFF);
+            // 1. Asignación directa y eficiente de std::wstring.
+            info.file_path = op.file_path;
+
+            // 2. Conversión correcta de system_clock::time_point a FILETIME.
+            //    Obtenemos la duración desde el epoch de system_clock (1970-01-01).
+            auto duration = op.timestamp.time_since_epoch();
+
+            //    La convertimos a un formato compatible con FILETIME (intervalos de 100ns).
+            auto filetime_duration = std::chrono::duration_cast<std::chrono::duration<int64_t, std::ratio<1, 10'000'000>>>(duration);
+
+            //    Creamos un objeto FILETIME a partir de esta duración.
+            FILETIME ft = { 0, 0 };
+            *(int64_t*)&ft = filetime_duration.count();
+
+            //    Añadimos el offset entre el epoch de FILETIME (1601) y el de UNIX (1970).
+            //    116444736000000000LL es el número de intervalos de 100ns entre ambos epochs.
+            *(int64_t*)&ft += 116444736000000000LL;
+
+            info.timestamp = ft;
 
             detector_ops.push_back(info);
         }
 
-        // Analyze with behavioral detector
+        // Analizar con el detector de comportamiento.
         auto result = behavioral_detector_->AnalyzeBatch(detector_ops);
         return result.confidence_score;
     }
