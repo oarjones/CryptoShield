@@ -30,6 +30,12 @@
     <ClInclude Include="CryptoShield.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Protection\SelfProtection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\CallbackProtection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CryptoShield.c">
@@ -42,6 +48,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Utilities.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Protection\SelfProtection.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Protection\CallbackProtection.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
