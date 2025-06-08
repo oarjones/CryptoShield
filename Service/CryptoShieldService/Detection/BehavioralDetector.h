@@ -103,20 +103,21 @@ namespace CryptoShield::Detection {
         /**
          * @brief Configuration for detection thresholds
          */
-        struct Configuration {
+        /*struct Configuration {
             size_t min_operations_threshold = 50;
             size_t min_directories_threshold = 3;
             size_t min_extensions_threshold = 2;
             double max_operations_per_second = 10.0;
             std::chrono::seconds window_duration{ 60 };
             double suspicion_score_threshold = 0.7;
-        };
+        };*/
 
         /**
          * @brief Constructor
          * @param config Detection configuration
          */
-        explicit MassFileModificationDetector(const Configuration& config = {});
+        //explicit MassFileModificationDetector(const Configuration& config = {});
+        explicit MassFileModificationDetector(const DetectionEngineConfig::BehavioralConfig& config);
 
         /**
          * @brief Destructor
@@ -139,7 +140,7 @@ namespace CryptoShield::Detection {
          * @brief Update configuration
          * @param config New configuration
          */
-        void UpdateConfiguration(const Configuration& config);
+        //void UpdateConfiguration(const Configuration& config);
 
         /**
          * @brief Get current window statistics
@@ -200,7 +201,7 @@ namespace CryptoShield::Detection {
         std::wstring ExtractExtension(const std::wstring& file_path) const;
 
     private:
-        Configuration config_;
+        DetectionEngineConfig::BehavioralConfig config_;
         OperationWindow current_window_;
         mutable std::mutex window_mutex_;
         std::chrono::steady_clock::time_point last_cleanup_;
@@ -213,7 +214,8 @@ namespace CryptoShield::Detection {
     class FileExtensionMonitor {
     public:
         // Modify constructor
-        explicit FileExtensionMonitor(const CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig& config);
+        //explicit FileExtensionMonitor(const CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig& config);
+        explicit FileExtensionMonitor(const DetectionEngineConfig::BehavioralConfig& config);
         /**
          * @brief Destructor
          */
@@ -259,6 +261,8 @@ namespace CryptoShield::Detection {
         void CleanupOldRecords(std::chrono::seconds max_age = std::chrono::seconds(3600));
 
     private:
+
+        
         /**
          * @brief Check if extension matches suspicious pattern
          * @param extension Extension to check
@@ -289,7 +293,7 @@ namespace CryptoShield::Detection {
         mutable std::mutex extensions_mutex_;
 
         // Add config member
-        CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig config_;
+        DetectionEngineConfig::BehavioralConfig config_;
     };
 
     /**
@@ -408,10 +412,10 @@ namespace CryptoShield::Detection {
          * @param min_extensions Minimum extensions affected
          * @param max_rate Maximum operations per second
          */
-        void ConfigureThresholds(size_t min_operations,
+        /*void ConfigureThresholds(size_t min_operations,
             size_t min_directories,
             size_t min_extensions,
-            double max_rate);
+            double max_rate);*/
 
         /**
          * @brief Get process behavior profile

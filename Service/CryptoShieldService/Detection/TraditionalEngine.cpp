@@ -23,7 +23,7 @@ namespace CryptoShield::Detection {
     /**
      * @brief Constructor
      */
-    TraditionalEngine::TraditionalEngine(const EngineConfig& config)
+    TraditionalEngine::TraditionalEngine(const DetectionEngineConfig& config)
         : config_(config)
         , initialized_(false)
         , running_(false)
@@ -58,22 +58,22 @@ namespace CryptoShield::Detection {
             entropy_analyzer_ = std::make_unique<AdvancedEntropyAnalysis>();
 
             // Initialize behavioral detector
-            behavioral_detector_ = std::make_unique<BehavioralDetector>();
-            behavioral_detector_->ConfigureThresholds(
-                config_.min_operations_for_detection,
-                3,  // min directories
-                2,  // min extensions
-                10.0 // max ops per second
-            );
+            behavioral_detector_ = std::make_unique<BehavioralDetector>(config_.behavioral);
+            //behavioral_detector_->ConfigureThresholds(
+            //    config_.min_operations_for_detection,
+            //    3,  // min directories
+            //    2,  // min extensions
+            //    10.0 // max ops per second
+            //);
 
             // Initialize system activity monitor
             system_monitor_ = std::make_unique<SystemActivityMonitor>();
 
             // Initialize scoring engine
             WeightConfiguration weights;
-            weights.entropy_weight = config_.entropy_weight;
-            weights.behavioral_weight = config_.behavioral_weight;
-            weights.system_activity_weight = config_.system_activity_weight;
+            weights.entropy_weight = config_.scoring.entropy_weight;
+            weights.behavioral_weight = config_.scoring.behavioral_weight;
+            weights.system_activity_weight = config_.scoring.system_activity_weight;
             weights.temporal_weight = 0.2; // Fixed temporal weight
 
             scoring_engine_ = std::make_unique<ScoringEngine>();
@@ -155,18 +155,18 @@ namespace CryptoShield::Detection {
         double system_score = 0.0;
 
         // Entropy analysis
-        if (config_.enable_entropy_analysis) {
+        if (config_.entropy.enabled) {
             entropy_score = PerformEntropyAnalysis(operation);
         }
 
         // Behavioral analysis
-        if (config_.enable_behavioral_detection) {
+        if (config_.behavioral.enabled) {
             std::lock_guard<std::mutex> lock(operations_mutex_);
             behavioral_score = PerformBehavioralAnalysis(recent_operations_);
         }
 
         // System activity analysis
-        if (config_.enable_system_monitoring) {
+        if (config_.system_activity.enabled) {
             system_score = PerformSystemAnalysis(operation.process_id);
         }
 
@@ -179,7 +179,7 @@ namespace CryptoShield::Detection {
         );
 
         // Apply false positive reduction if enabled
-        if (config_.enable_false_positive_reduction) {
+        if (config_.false_positive.enabled) {
             result = ApplyFalsePositiveReduction(result);
         }
 
@@ -264,7 +264,7 @@ namespace CryptoShield::Detection {
     /**
      * @brief Update engine configuration
      */
-    void TraditionalEngine::UpdateConfiguration(const EngineConfig& config)
+    void TraditionalEngine::UpdateConfiguration(const DetectionEngineConfig& config)
     {
         std::lock_guard<std::mutex> lock(engine_mutex_);
 
@@ -273,18 +273,18 @@ namespace CryptoShield::Detection {
         // Update component configurations
         if (scoring_engine_) {
             WeightConfiguration weights;
-            weights.entropy_weight = config.entropy_weight;
-            weights.behavioral_weight = config.behavioral_weight;
-            weights.system_activity_weight = config.system_activity_weight;
+            weights.entropy_weight = config.scoring.entropy_weight;
+            weights.behavioral_weight = config.scoring.behavioral_weight;
+            weights.system_activity_weight = config.scoring.system_activity_weight;
             scoring_engine_->UpdateWeights(weights);
         }
 
-        if (behavioral_detector_) {
+        /*if (behavioral_detector_) {
             behavioral_detector_->ConfigureThresholds(
                 config.min_operations_for_detection,
                 3, 2, 10.0
             );
-        }
+        }*/
 
         std::wcout << L"[TraditionalEngine] Configuration updated" << std::endl;
     }
@@ -318,86 +318,86 @@ namespace CryptoShield::Detection {
     /**
      * @brief Get default engine configuration
      */
-    EngineConfig TraditionalEngine::GetDefaultConfig()
-    {
-        EngineConfig config;
+    //EngineConfig TraditionalEngine::GetDefaultConfig()
+    //{
+    //    EngineConfig config;
 
-        // Entropy analysis settings
-        config.enable_entropy_analysis = true;
-        config.entropy_weight = 0.30;
+    //    // Entropy analysis settings
+    //    config.enable_entropy_analysis = true;
+    //    config.entropy_weight = 0.30;
 
-        // Behavioral detection settings
-        config.enable_behavioral_detection = true;
-        config.behavioral_weight = 0.25;
-        config.min_operations_for_detection = 50;
+    //    // Behavioral detection settings
+    //    config.enable_behavioral_detection = true;
+    //    config.behavioral_weight = 0.25;
+    //    config.min_operations_for_detection = 50;
 
-        // System monitoring settings
-        config.enable_system_monitoring = true;
-        config.system_activity_weight = 0.25;
+    //    // System monitoring settings
+    //    config.enable_system_monitoring = true;
+    //    config.system_activity_weight = 0.25;
 
-        // General settings
-        config.max_file_size_for_analysis = 100 * 1024 * 1024; // 100MB
-        config.analysis_thread_count = 4;
-        config.enable_false_positive_reduction = true;
-        config.enable_detailed_logging = true;
+    //    // General settings
+    //    config.max_file_size_for_analysis = 100 * 1024 * 1024; // 100MB
+    //    config.analysis_thread_count = 4;
+    //    config.enable_false_positive_reduction = true;
+    //    config.enable_detailed_logging = true;
 
-        return config;
-    }
+    //    return config;
+    //}
 
     /**
      * @brief Load configuration from file
      */
-    EngineConfig TraditionalEngine::LoadConfiguration(const std::wstring& config_file)
-    {
-        try {
-            std::ifstream file(config_file);
-            if (!file.is_open()) {
-                return GetDefaultConfig();
-            }
+    //EngineConfig TraditionalEngine::LoadConfiguration(const std::wstring& config_file)
+    //{
+    //    try {
+    //        std::ifstream file(config_file);
+    //        if (!file.is_open()) {
+    //            return GetDefaultConfig();
+    //        }
 
-            nlohmann::json j;
-            file >> j;
+    //        nlohmann::json j;
+    //        file >> j;
 
-            EngineConfig config;
+    //        EngineConfig config;
 
-            // Parse entropy settings
-            if (j.contains("entropy_analysis")) {
-                auto& ea = j["entropy_analysis"];
-                config.enable_entropy_analysis = ea.value("enabled", true);
-                config.entropy_weight = ea.value("weight", 0.30);
-            }
+    //        // Parse entropy settings
+    //        if (j.contains("entropy_analysis")) {
+    //            auto& ea = j["entropy_analysis"];
+    //            config.enable_entropy_analysis = ea.value("enabled", true);
+    //            config.entropy_weight = ea.value("weight", 0.30);
+    //        }
 
-            // Parse behavioral settings
-            if (j.contains("behavioral_detection")) {
-                auto& bd = j["behavioral_detection"];
-                config.enable_behavioral_detection = bd.value("enabled", true);
-                config.behavioral_weight = bd.value("weight", 0.25);
-                config.min_operations_for_detection = bd.value("min_operations", 50);
-            }
+    //        // Parse behavioral settings
+    //        if (j.contains("behavioral_detection")) {
+    //            auto& bd = j["behavioral_detection"];
+    //            config.enable_behavioral_detection = bd.value("enabled", true);
+    //            config.behavioral_weight = bd.value("weight", 0.25);
+    //            config.min_operations_for_detection = bd.value("min_operations", 50);
+    //        }
 
-            // Parse system monitoring settings
-            if (j.contains("system_monitoring")) {
-                auto& sm = j["system_monitoring"];
-                config.enable_system_monitoring = sm.value("enabled", true);
-                config.system_activity_weight = sm.value("weight", 0.25);
-            }
+    //        // Parse system monitoring settings
+    //        if (j.contains("system_monitoring")) {
+    //            auto& sm = j["system_monitoring"];
+    //            config.enable_system_monitoring = sm.value("enabled", true);
+    //            config.system_activity_weight = sm.value("weight", 0.25);
+    //        }
 
-            // Parse general settings
-            if (j.contains("general")) {
-                auto& g = j["general"];
-                config.max_file_size_for_analysis = g.value("max_file_size", 104857600);
-                config.analysis_thread_count = g.value("thread_count", 4);
-                config.enable_false_positive_reduction = g.value("false_positive_reduction", true);
-                config.enable_detailed_logging = g.value("detailed_logging", true);
-            }
+    //        // Parse general settings
+    //        if (j.contains("general")) {
+    //            auto& g = j["general"];
+    //            config.max_file_size_for_analysis = g.value("max_file_size", 104857600);
+    //            config.analysis_thread_count = g.value("thread_count", 4);
+    //            config.enable_false_positive_reduction = g.value("false_positive_reduction", true);
+    //            config.enable_detailed_logging = g.value("detailed_logging", true);
+    //        }
 
-            return config;
-        }
-        catch (const std::exception& e) {
-            std::wcerr << L"[TraditionalEngine] Failed to load config: " << e.what() << std::endl;
-            return GetDefaultConfig();
-        }
-    }
+    //        return config;
+    //    }
+    //    catch (const std::exception& e) {
+    //        std::wcerr << L"[TraditionalEngine] Failed to load config: " << e.what() << std::endl;
+    //        return GetDefaultConfig();
+    //    }
+    //}
 
     /**
      * @brief Perform entropy analysis
@@ -497,14 +497,14 @@ namespace CryptoShield::Detection {
         result.process_id = operation.process_id;
 
         // Calculate weighted score
-        double total_weight = config_.entropy_weight +
-            config_.behavioral_weight +
-            config_.system_activity_weight +
+        double total_weight = config_.scoring.entropy_weight +
+            config_.scoring.behavioral_weight +
+            config_.scoring.system_activity_weight +
             0.2; // temporal weight
 
-        double weighted_score = (entropy_score * config_.entropy_weight +
-            behavioral_score * config_.behavioral_weight +
-            system_score * config_.system_activity_weight) / total_weight;
+        double weighted_score = (entropy_score * config_.scoring.entropy_weight +
+            behavioral_score * config_.scoring.behavioral_weight +
+            system_score * config_.scoring.system_activity_weight) / total_weight;
 
         result.confidence_score = weighted_score;
         result.threat_level = ClassifyThreatLevel(weighted_score);

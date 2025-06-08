@@ -16,6 +16,7 @@
 #include "EntropyAnalyzer.h"
 #include "BehavioralDetector.h"
 #include "SystemActivityMonitor.h"
+#include "../Utils/StringUtils.h"
 
 namespace CryptoShield::Detection {
 
@@ -397,6 +398,7 @@ namespace CryptoShield::Detection {
         return score;
     }
 
+    
     /**
      * @brief Calculate behavioral component score
      */
@@ -412,7 +414,7 @@ namespace CryptoShield::Detection {
 
         // Add indicators
         for (const auto& pattern : result.suspicious_patterns) {
-            score.indicators.push_back(std::string(pattern.begin(), pattern.end()));
+            score.indicators.push_back(CryptoShield::Utils::to_string_utf8(pattern));
         }
 
         // Boost score for multiple suspicious patterns
@@ -860,7 +862,8 @@ namespace CryptoShield::Detection {
         // Convert contributing factors to searchable strings
         std::string combined_factors;
         for (const auto& factor : analysis.contributing_factors) {
-            combined_factors += std::string(factor.begin(), factor.end()) + " ";
+            //combined_factors += std::string(factor.begin(), factor.end()) + " ";
+            combined_factors += CryptoShield::Utils::to_string_utf8(factor) + " ";
         }
 
         // Convert to lowercase for matching

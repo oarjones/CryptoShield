@@ -767,7 +767,7 @@ namespace CryptoShield::Detection {
     /**
      * @brief Get default configuration
      */
-    FalsePositiveMinimizerConfig FalsePositiveMinimizer::GetDefaultConfig()
+    /*FalsePositiveMinimizerConfig FalsePositiveMinimizer::GetDefaultConfig()
     {
         FalsePositiveMinimizerConfig config;
 
@@ -782,7 +782,7 @@ namespace CryptoShield::Detection {
         config.strict_mode = false;
 
         return config;
-    }
+    }*/
 
     /**
      * @brief Check suspicious anomalies (simplified implementation)

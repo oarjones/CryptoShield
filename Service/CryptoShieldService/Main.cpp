@@ -110,6 +110,23 @@ int wmain(int argc, wchar_t* argv[])
             ServiceWorkerThread(nullptr);
             return 0;
         }
+        else if (command == L"/generate-config") {
+            std::wcout << L"Generating default configuration file (detection_config.json)..." << std::endl;
+
+            // Creamos una instancia del gestor de configuración
+            auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
+
+            // La configuración por defecto ya se carga en el constructor del manager.
+            // Ahora, simplemente la guardamos a un fichero.
+            if (config_manager->SaveConfiguration(L"detection_config.json")) {
+                std::wcout << L"Default configuration file 'detection_config.json' created successfully." << std::endl;
+                return 0;
+            }
+            else {
+                std::wcerr << L"Failed to create default configuration file." << std::endl;
+                return 1;
+            }
+        }
         else {
             std::wcerr << L"Unknown command: " << command << std::endl;
             std::wcerr << L"Usage: " << argv[0] << L" [/install | /uninstall | /start | /stop | /debug]" << std::endl;

@@ -16,6 +16,7 @@
 #include <numeric>
 #include <cwctype> 
 
+
 namespace CryptoShield::Detection {
 
     // Static member definitions
@@ -25,12 +26,12 @@ namespace CryptoShield::Detection {
     /**
      * @brief Constructor
      */
-    MassFileModificationDetector::MassFileModificationDetector(const Configuration& config)
-        : config_(config)
-    {
-        current_window_.start_time = std::chrono::steady_clock::now();
-        last_cleanup_ = current_window_.start_time;
-    }
+    MassFileModificationDetector::MassFileModificationDetector(const DetectionEngineConfig::BehavioralConfig& config)
+    : config_(config) // Ahora recibe y guarda la configuración correcta
+{
+    current_window_.start_time = std::chrono::steady_clock::now();
+    last_cleanup_ = current_window_.start_time;
+}
 
     /**
      * @brief Analyze file operation
@@ -112,11 +113,11 @@ namespace CryptoShield::Detection {
     /**
      * @brief Update configuration
      */
-    void MassFileModificationDetector::UpdateConfiguration(const Configuration& config)
+    /*void MassFileModificationDetector::UpdateConfiguration(const Configuration& config)
     {
         std::lock_guard<std::mutex> lock(window_mutex_);
         config_ = config;
-    }
+    }*/
 
     /**
      * @brief Get current window statistics
@@ -245,9 +246,9 @@ namespace CryptoShield::Detection {
     /**
      * @brief Constructor
      */
-    FileExtensionMonitor::FileExtensionMonitor(const CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig& config)
+    FileExtensionMonitor::FileExtensionMonitor(const DetectionEngineConfig::BehavioralConfig& config)
         : config_(config) {
-        // Constructor body, if any
+        
     }
 
     /**
@@ -353,9 +354,15 @@ namespace CryptoShield::Detection {
     /**
      * @brief Check if extension is known ransomware indicator
      */
-    bool FileExtensionMonitor::IsKnownRansomwareExtension(const std::wstring& extension) const
+    /*bool FileExtensionMonitor::IsKnownRansomwareExtension(const std::wstring& extension) const
     {
         return std::find(config_.suspicious_extensions.begin(), config_.suspicious_extensions.end(), extension) != config_.suspicious_extensions.end();
+    }*/
+    bool FileExtensionMonitor::IsKnownRansomwareExtension(const std::wstring& extension) const
+    {
+        const auto& known_extensions = config_.suspicious_extensions;
+        // La llamada correcta a std::find requiere el iterador final.
+        return std::find(known_extensions.begin(), known_extensions.end(), extension) != known_extensions.end();
     }
 
     /**
@@ -398,50 +405,75 @@ namespace CryptoShield::Detection {
     /**
      * @brief Check if extension matches suspicious pattern
      */
-    bool FileExtensionMonitor::MatchesSuspiciousPattern(const std::wstring& extension) const {
-        if (config_.suspicious_patterns_regex.empty()) {
-            // Fallback to old logic or return false if no regex patterns are configured
-            // For now, let's keep the old logic as a fallback if regex list is empty.
-            // This part can be adjusted based on desired behavior.
-            // Check for email-like patterns
-            if (extension.find(L'@') != std::wstring::npos) {
-                return true;
-            }
-            // Check for brackets
-            if (extension.find(L'[') != std::wstring::npos ||
-                extension.find(L']') != std::wstring::npos) {
-                return true;
-            }
-            // Check for hex-only extensions (simple check)
-            if (extension.length() > 4 && extension.length() < 10) { // Typical short hex-like strings
-                 bool all_hex_like = true;
-                 int hex_chars = 0;
-                 for (wchar_t c : extension) {
-                    if (c == L'.') continue;
-                    if (!std::iswxdigit(c)) {
-                        all_hex_like = false;
-                        break;
-                    }
-                    hex_chars++;
-                 }
-                 if (all_hex_like && hex_chars > 3) return true; // e.g. .abcd, .1234
-            }
-            return false;
-        }
-        for (const auto& pattern_str : config_.suspicious_patterns_regex) {
+    //bool FileExtensionMonitor::MatchesSuspiciousPattern(const std::wstring& extension) const {
+    //    if (config_.suspicious_patterns_regex.empty()) {
+    //        // Fallback to old logic or return false if no regex patterns are configured
+    //        // For now, let's keep the old logic as a fallback if regex list is empty.
+    //        // This part can be adjusted based on desired behavior.
+    //        // Check for email-like patterns
+    //        if (extension.find(L'@') != std::wstring::npos) {
+    //            return true;
+    //        }
+    //        // Check for brackets
+    //        if (extension.find(L'[') != std::wstring::npos ||
+    //            extension.find(L']') != std::wstring::npos) {
+    //            return true;
+    //        }
+    //        // Check for hex-only extensions (simple check)
+    //        if (extension.length() > 4 && extension.length() < 10) { // Typical short hex-like strings
+    //             bool all_hex_like = true;
+    //             int hex_chars = 0;
+    //             for (wchar_t c : extension) {
+    //                if (c == L'.') continue;
+    //                if (!std::iswxdigit(c)) {
+    //                    all_hex_like = false;
+    //                    break;
+    //                }
+    //                hex_chars++;
+    //             }
+    //             if (all_hex_like && hex_chars > 3) return true; // e.g. .abcd, .1234
+    //        }
+    //        return false;
+    //    }
+    //    for (const auto& pattern_str : config_.suspicious_patterns_regex) {
+    //        try {
+    //            std::wregex pattern_regex(pattern_str);
+    //            if (std::regex_match(extension, pattern_regex)) {
+    //                return true;
+    //            }
+    //        } catch (const std::regex_error& e) {
+    //             std::wcerr << L"Regex error in FileExtensionMonitor for pattern '" << pattern_str
+    //                       << L"': " << e.what() << std::endl;
+    //            // Potentially skip this pattern or handle error as appropriate
+    //        }
+    //    }
+    //    return false;
+    //}
+
+    bool FileExtensionMonitor::MatchesSuspiciousPattern(const std::wstring& extension) const
+    {
+        // Usamos la lista de patrones regex de la configuración.
+        const auto& patterns = config_.suspicious_patterns_regex;
+
+        for (const auto& pattern_str : patterns) {
             try {
-                std::wregex pattern_regex(pattern_str);
+                // Creamos un objeto wregex para cada patrón.
+                std::wregex pattern_regex(pattern_str, std::regex_constants::icase);
+
+                // Comprobamos si la extensión coincide con el patrón.
                 if (std::regex_match(extension, pattern_regex)) {
                     return true;
                 }
-            } catch (const std::regex_error& e) {
-                 std::wcerr << L"Regex error in FileExtensionMonitor for pattern '" << pattern_str
-                           << L"': " << e.what() << std::endl;
-                // Potentially skip this pattern or handle error as appropriate
+            }
+            catch (const std::regex_error& e) {
+                // Opcional: Loggear si un patrón regex en el config es inválido.
+                std::wcerr << L"Invalid regex pattern in configuration: " << pattern_str << L" - " << e.what() << std::endl;
             }
         }
+
         return false;
     }
+
 
     /**
      * @brief Constructor
@@ -611,32 +643,15 @@ namespace CryptoShield::Detection {
     /**
      * @brief Constructor
      */
-    BehavioralDetector::BehavioralDetector(const CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig& config)
-        : config_(config), // Initialize the member
-          total_operations_analyzed_(0),
-          suspicious_patterns_detected_(0) {
-        // Initialize detection components
-        // Pass the behavioral config to MassFileModificationDetector if its constructor/config method changes
-        // For now, assuming MassFileModificationDetector uses its own struct which might be set via ConfigureThresholds
-        // or if it directly uses parts of BehavioralConfig, it will access it via config_ passed to its methods or if BehavioralDetector calls a specific config method on it.
-        // The existing ConfigureThresholds in BehavioralDetector seems to handle this for MassFileModificationDetector.
-        mass_modification_detector_ = std::make_unique<MassFileModificationDetector>(); // This might also need config
-
-        // Pass the behavioral config to FileExtensionMonitor
-        extension_monitor_ = std::make_unique<FileExtensionMonitor>(config_);
-
+    BehavioralDetector::BehavioralDetector(const DetectionEngineConfig::BehavioralConfig& config)
+        : config_(config), // Guarda la configuración
+        total_operations_analyzed_(0),
+        suspicious_patterns_detected_(0)
+    {
+        // Pasa la configuración al sub-componente
+        mass_modification_detector_ = std::make_unique<MassFileModificationDetector>(config);
+        extension_monitor_ = std::make_unique<FileExtensionMonitor>(config);
         traversal_detector_ = std::make_unique<DirectoryTraversalDetector>();
-
-        // ConfigureThresholds might be called later by TraditionalEngine or similar, using the main config.
-        // For now, ensure sub-components are constructed correctly.
-        // If MassFileModificationDetector's `Configuration` struct is derived from `BehavioralConfig` or can be set by it,
-        // then it should be done here or via a method call.
-        // The current `BehavioralDetector::ConfigureThresholds` method updates `config_` of type `MassFileModificationDetector::Configuration`
-        // This means the main `config_` of `BehavioralDetector` (which is now `BehavioralConfig`) should be used to set that.
-        // This part might need adjustment if `MassFileModificationDetector` is to be configured from `BehavioralConfig` directly at construction or via a new method.
-        // However, the prompt focuses on passing `BehavioralConfig` to `BehavioralDetector` and `FileExtensionMonitor`.
-        // The existing `BehavioralDetector::ConfigureThresholds` method will need to be updated to use `config_.min_operations_threshold` etc. from the new `config_` member.
-        // For now, only constructor changes are made as per immediate instructions.
     }
 
     /**
@@ -746,7 +761,7 @@ namespace CryptoShield::Detection {
     /**
      * @brief Configure detection thresholds
      */
-    void BehavioralDetector::ConfigureThresholds(size_t min_operations,
+    /*void BehavioralDetector::ConfigureThresholds(size_t min_operations,
         size_t min_directories,
         size_t min_extensions,
         double max_rate)
@@ -759,7 +774,7 @@ namespace CryptoShield::Detection {
 
         mass_modification_detector_->UpdateConfiguration(config);
         config_ = config;
-    }
+    }*/
 
     /**
      * @brief Get process behavior profile

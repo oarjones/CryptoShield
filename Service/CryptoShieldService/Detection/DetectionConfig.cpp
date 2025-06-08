@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include "../Utils/StringUtils.h"
 
 namespace CryptoShield::Detection {
 
@@ -281,6 +282,7 @@ namespace CryptoShield::Detection {
         }
     }
 
+
     /**
      * @brief Save configuration to file
      */
@@ -343,12 +345,12 @@ namespace CryptoShield::Detection {
             exts = nlohmann::json::array(); // Initialize as array
             for (const auto& ext : current_config_.behavioral.suspicious_extensions) {
                 //exts.push_back(std::string(ext.begin(), ext.end()));
-                exts.push_back(ext);
+                exts.push_back(CryptoShield::Utils::to_string_utf8(ext));
             }
             auto& patterns_regex = j["behavioral_detection"]["suspicious_patterns_regex"];
             patterns_regex = nlohmann::json::array(); // Initialize as array
             for (const auto& pat : current_config_.behavioral.suspicious_patterns_regex) {
-                patterns_regex.push_back(std::string(pat.begin(), pat.end()));
+                patterns_regex.push_back(CryptoShield::Utils::to_string_utf8(pat));
             }
 
             // Save system monitoring configuration
@@ -409,27 +411,27 @@ namespace CryptoShield::Detection {
             auto& trusted_pubs = j["false_positive_minimizer"]["trusted_publishers"];
             trusted_pubs = nlohmann::json::array(); // Initialize as array
             for (const auto& pub : current_config_.false_positive.trusted_publishers) {
-                trusted_pubs.push_back(std::string(pub.begin(), pub.end()));
+                trusted_pubs.push_back(CryptoShield::Utils::to_string_utf8(pub));
             }
             auto& backup_sw = j["false_positive_minimizer"]["trusted_backup_software"];
             backup_sw = nlohmann::json::array(); // Initialize as array
             for (const auto& proc : current_config_.false_positive.trusted_backup_software) {
-                backup_sw.push_back(std::string(proc.begin(), proc.end()));
+                backup_sw.push_back(CryptoShield::Utils::to_string_utf8(proc));
             }
             auto& comp_sw = j["false_positive_minimizer"]["trusted_compression_software"];
             comp_sw = nlohmann::json::array(); // Initialize as array
             for (const auto& proc : current_config_.false_positive.trusted_compression_software) {
-                comp_sw.push_back(std::string(proc.begin(), proc.end()));
+                comp_sw.push_back(CryptoShield::Utils::to_string_utf8(proc));
             }
             auto& dev_sw = j["false_positive_minimizer"]["trusted_dev_software"];
             dev_sw = nlohmann::json::array(); // Initialize as array
             for (const auto& proc : current_config_.false_positive.trusted_dev_software) {
-                dev_sw.push_back(std::string(proc.begin(), proc.end()));
+                dev_sw.push_back(CryptoShield::Utils::to_string_utf8(proc));
             }
             auto& sys_sw = j["false_positive_minimizer"]["trusted_system_software"];
             sys_sw = nlohmann::json::array(); // Initialize as array
             for (const auto& proc : current_config_.false_positive.trusted_system_software) {
-                sys_sw.push_back(std::string(proc.begin(), proc.end()));
+                sys_sw.push_back(CryptoShield::Utils::to_string_utf8(proc));
             }
 
             // Save response configuration

@@ -8,7 +8,7 @@
  */
 
 #pragma once
-
+#include "DetectionConfig.h"
 #include <windows.h>
 #include <memory>
 #include <vector>
@@ -82,26 +82,26 @@ namespace CryptoShield::Detection {
     /**
      * @brief Engine configuration
      */
-    struct EngineConfig {
-        // Entropy analysis settings
-        bool enable_entropy_analysis;
-        double entropy_weight;
+    //struct EngineConfig {
+    //    // Entropy analysis settings
+    //    bool enable_entropy_analysis;
+    //    double entropy_weight;
 
-        // Behavioral detection settings
-        bool enable_behavioral_detection;
-        double behavioral_weight;
-        size_t min_operations_for_detection;
+    //    // Behavioral detection settings
+    //    bool enable_behavioral_detection;
+    //    double behavioral_weight;
+    //    size_t min_operations_for_detection;
 
-        // System monitoring settings
-        bool enable_system_monitoring;
-        double system_activity_weight;
+    //    // System monitoring settings
+    //    bool enable_system_monitoring;
+    //    double system_activity_weight;
 
-        // General settings
-        size_t max_file_size_for_analysis;
-        size_t analysis_thread_count;
-        bool enable_false_positive_reduction;
-        bool enable_detailed_logging;
-    };
+    //    // General settings
+    //    size_t max_file_size_for_analysis;
+    //    size_t analysis_thread_count;
+    //    bool enable_false_positive_reduction;
+    //    bool enable_detailed_logging;
+    //};
 
 
     // Añade esta nueva estructura, puede estar fuera o dentro de la clase TraditionalEngine
@@ -122,7 +122,7 @@ namespace CryptoShield::Detection {
          * @brief Constructor
          * @param config Engine configuration
          */
-        explicit TraditionalEngine(const EngineConfig& config = GetDefaultConfig());
+        explicit TraditionalEngine(const DetectionEngineConfig& config);
 
         /**
          * @brief Destructor
@@ -162,7 +162,7 @@ namespace CryptoShield::Detection {
          * @brief Update engine configuration
          * @param config New configuration
          */
-        void UpdateConfiguration(const EngineConfig& config);
+        void UpdateConfiguration(const DetectionEngineConfig& config);
 
         /**
          * @brief Get current engine statistics
@@ -183,14 +183,14 @@ namespace CryptoShield::Detection {
          * @brief Get default engine configuration
          * @return Default configuration
          */
-        static EngineConfig GetDefaultConfig();
+        /*static EngineConfig GetDefaultConfig();*/
 
         /**
          * @brief Load configuration from file
          * @param config_file Path to configuration file
          * @return Loaded configuration
          */
-        static EngineConfig LoadConfiguration(const std::wstring& config_file);
+        /*static DetectionEngineConfig LoadConfiguration(const std::wstring& config_file);*/
 
     private:
         /**
@@ -250,7 +250,7 @@ namespace CryptoShield::Detection {
 
     private:
         // Configuration
-        EngineConfig config_;
+        DetectionEngineConfig config_;
 
         // Detection components
         std::unique_ptr<AdvancedEntropyAnalysis> entropy_analyzer_;
