@@ -15,6 +15,8 @@
 #include <csignal>
 #include "CommunicationManager.h"
 #include "MessageProcessor.h"
+#include "Detection/DetectionConfig.h" // Added
+#include "Detection/TraditionalEngine.h" // Added
 
  // Service name and display name
 constexpr wchar_t SERVICE_NAME[] = L"CryptoShieldService";
@@ -267,6 +269,30 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     processor_config.alert_threshold = 40;
 
     auto message_processor = std::make_unique<CryptoShield::MessageProcessor>(processor_config);
+
+    // >>> ADD NEW CONFIGURATION LOADING LOGIC <<<
+    auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
+    bool config_loaded = config_manager->LoadConfiguration(L"detection_config.json"); // Or get path from a central place
+
+    if (!config_loaded) {
+        WriteEventLog(EVENTLOG_WARNING_TYPE, L"Failed to load detection_config.json. Using default detection settings.");
+        // The config_manager will use default settings if loading fails and GetConfiguration() is called.
+    } else {
+        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Successfully loaded detection_config.json.");
+    }
+
+    CryptoShield::Detection::DetectionEngineConfig engine_config = config_manager->GetConfiguration();
+
+    // >>> UPDATE TraditionalEngine INSTANTIATION <<<
+    auto traditional_engine = std::make_unique<CryptoShield::Detection::TraditionalEngine>(engine_config); // NEW
+
+    // Ensure traditional_engine is initialized
+    if (!traditional_engine->Initialize()) {
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to initialize TraditionalEngine.");
+        // Handle error, perhaps by stopping the service or degrading functionality.
+    } else {
+        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"TraditionalEngine initialized successfully.");
+    }
 
     // Set up callbacks
     communication_manager->SetMessageCallback(

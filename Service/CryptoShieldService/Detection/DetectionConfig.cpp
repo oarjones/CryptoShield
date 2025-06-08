@@ -110,6 +110,14 @@ namespace CryptoShield::Detection {
                         );
                     }
                 }
+                if (b.contains("suspicious_patterns_regex") && b["suspicious_patterns_regex"].is_array()) {
+                    current_config_.behavioral.suspicious_patterns_regex.clear();
+                    for (const auto& pat : b["suspicious_patterns_regex"]) {
+                        current_config_.behavioral.suspicious_patterns_regex.push_back(
+                            std::wstring(pat.get<std::string>().begin(), pat.get<std::string>().end())
+                        );
+                    }
+                }
             }
 
             // Parse system activity configuration
@@ -172,6 +180,47 @@ namespace CryptoShield::Detection {
                 current_config_.false_positive.reputation_history_days = fp.value("reputation_history_days", 30);
                 current_config_.false_positive.auto_whitelist_signed = fp.value("auto_whitelist_signed", false);
                 current_config_.false_positive.strict_mode = fp.value("strict_mode", false);
+
+                if (fp.contains("trusted_publishers") && fp["trusted_publishers"].is_array()) {
+                    current_config_.false_positive.trusted_publishers.clear();
+                    for (const auto& pub : fp["trusted_publishers"]) {
+                        current_config_.false_positive.trusted_publishers.push_back(
+                            std::wstring(pub.get<std::string>().begin(), pub.get<std::string>().end())
+                        );
+                    }
+                }
+                if (fp.contains("trusted_backup_software") && fp["trusted_backup_software"].is_array()) {
+                    current_config_.false_positive.trusted_backup_software.clear();
+                    for (const auto& proc : fp["trusted_backup_software"]) {
+                        current_config_.false_positive.trusted_backup_software.push_back(
+                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                        );
+                    }
+                }
+                if (fp.contains("trusted_compression_software") && fp["trusted_compression_software"].is_array()) {
+                    current_config_.false_positive.trusted_compression_software.clear();
+                    for (const auto& proc : fp["trusted_compression_software"]) {
+                        current_config_.false_positive.trusted_compression_software.push_back(
+                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                        );
+                    }
+                }
+                if (fp.contains("trusted_dev_software") && fp["trusted_dev_software"].is_array()) {
+                    current_config_.false_positive.trusted_dev_software.clear();
+                    for (const auto& proc : fp["trusted_dev_software"]) {
+                        current_config_.false_positive.trusted_dev_software.push_back(
+                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                        );
+                    }
+                }
+                if (fp.contains("trusted_system_software") && fp["trusted_system_software"].is_array()) {
+                    current_config_.false_positive.trusted_system_software.clear();
+                    for (const auto& proc : fp["trusted_system_software"]) {
+                        current_config_.false_positive.trusted_system_software.push_back(
+                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                        );
+                    }
+                }
             }
 
             // Parse response configuration
@@ -291,9 +340,15 @@ namespace CryptoShield::Detection {
 
             // Save suspicious extensions
             auto& exts = j["behavioral_detection"]["suspicious_extensions"];
+            exts = nlohmann::json::array(); // Initialize as array
             for (const auto& ext : current_config_.behavioral.suspicious_extensions) {
                 //exts.push_back(std::string(ext.begin(), ext.end()));
                 exts.push_back(ext);
+            }
+            auto& patterns_regex = j["behavioral_detection"]["suspicious_patterns_regex"];
+            patterns_regex = nlohmann::json::array(); // Initialize as array
+            for (const auto& pat : current_config_.behavioral.suspicious_patterns_regex) {
+                patterns_regex.push_back(std::string(pat.begin(), pat.end()));
             }
 
             // Save system monitoring configuration
@@ -350,6 +405,32 @@ namespace CryptoShield::Detection {
             j["false_positive_minimizer"]["reputation_history_days"] = current_config_.false_positive.reputation_history_days;
             j["false_positive_minimizer"]["auto_whitelist_signed"] = current_config_.false_positive.auto_whitelist_signed;
             j["false_positive_minimizer"]["strict_mode"] = current_config_.false_positive.strict_mode;
+
+            auto& trusted_pubs = j["false_positive_minimizer"]["trusted_publishers"];
+            trusted_pubs = nlohmann::json::array(); // Initialize as array
+            for (const auto& pub : current_config_.false_positive.trusted_publishers) {
+                trusted_pubs.push_back(std::string(pub.begin(), pub.end()));
+            }
+            auto& backup_sw = j["false_positive_minimizer"]["trusted_backup_software"];
+            backup_sw = nlohmann::json::array(); // Initialize as array
+            for (const auto& proc : current_config_.false_positive.trusted_backup_software) {
+                backup_sw.push_back(std::string(proc.begin(), proc.end()));
+            }
+            auto& comp_sw = j["false_positive_minimizer"]["trusted_compression_software"];
+            comp_sw = nlohmann::json::array(); // Initialize as array
+            for (const auto& proc : current_config_.false_positive.trusted_compression_software) {
+                comp_sw.push_back(std::string(proc.begin(), proc.end()));
+            }
+            auto& dev_sw = j["false_positive_minimizer"]["trusted_dev_software"];
+            dev_sw = nlohmann::json::array(); // Initialize as array
+            for (const auto& proc : current_config_.false_positive.trusted_dev_software) {
+                dev_sw.push_back(std::string(proc.begin(), proc.end()));
+            }
+            auto& sys_sw = j["false_positive_minimizer"]["trusted_system_software"];
+            sys_sw = nlohmann::json::array(); // Initialize as array
+            for (const auto& proc : current_config_.false_positive.trusted_system_software) {
+                sys_sw.push_back(std::string(proc.begin(), proc.end()));
+            }
 
             // Save response configuration
             j["response"]["enable_auto_response"] = current_config_.response.enable_auto_response;
@@ -518,6 +599,10 @@ namespace CryptoShield::Detection {
             L".locked", L".encrypted", L".crypto", L".enc",
             L".crypted", L".kraken", L".darkness", L".nochance"
         };
+        config.behavioral.suspicious_patterns_regex = {
+            L".*\\.id-[0-9A-F]{8}\\.[a-z]+@[a-z]+\\.[a-z]+$",
+            L".*\\.[0-9A-F]{32}$"
+        };
 
         // System activity configuration
         config.system_activity.enabled = true;
@@ -567,6 +652,11 @@ namespace CryptoShield::Detection {
         config.false_positive.reputation_history_days = 30;
         config.false_positive.auto_whitelist_signed = false;
         config.false_positive.strict_mode = false;
+        config.false_positive.trusted_publishers = { L"Microsoft Corporation", L"Google LLC" };
+        config.false_positive.trusted_backup_software = { L"Acronis", L"Veeam", L"Macrium" };
+        config.false_positive.trusted_compression_software = { L"WinRAR", L"7-Zip", L"WinZip" };
+        config.false_positive.trusted_dev_software = { L"devenv", L"cl.exe", L"gcc" };
+        config.false_positive.trusted_system_software = { L"TrustedInstaller", L"svchost" };
 
         // Response configuration
         config.response.enable_auto_response = true;

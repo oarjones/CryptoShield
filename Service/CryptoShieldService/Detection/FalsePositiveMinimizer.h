@@ -10,6 +10,7 @@
 #pragma once
 
 #include "TraditionalEngine.h"
+#include "DetectionConfig.h" // Added
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -118,17 +119,17 @@ namespace CryptoShield::Detection {
     /**
      * @brief False positive minimizer configuration
      */
-    struct FalsePositiveMinimizerConfig {
-        bool enable_whitelist;
-        bool enable_reputation_system;
+    // struct FalsePositiveMinimizerConfig { // Original struct, will be replaced by DetectionEngineConfig::FalsePositiveConfig
+    //     bool enable_whitelist;
+    //     bool enable_reputation_system;
         bool enable_signature_verification;
         bool enable_behavioral_analysis;
         double min_reputation_score;
         double max_fp_adjustment;
         size_t reputation_history_days;
-        bool auto_whitelist_signed;
-        bool strict_mode;
-    };
+    //     bool auto_whitelist_signed;
+    //     bool strict_mode;
+    // }; // Original struct end
 
     /**
      * @brief Main false positive minimizer class
@@ -136,13 +137,8 @@ namespace CryptoShield::Detection {
      */
     class FalsePositiveMinimizer {
     public:
-        /**
-         * @brief Constructor
-         * @param config Configuration settings
-         */
-        explicit FalsePositiveMinimizer(
-            const FalsePositiveMinimizerConfig& config = GetDefaultConfig());
-
+        // Modify constructor
+        explicit FalsePositiveMinimizer(const CryptoShield::Detection::DetectionEngineConfig::FalsePositiveConfig& config);
         /**
          * @brief Destructor
          */
@@ -298,17 +294,8 @@ namespace CryptoShield::Detection {
 
         Statistics GetStatistics() const;
 
-        /**
-         * @brief Get default configuration
-         * @return Default config
-         */
-        static FalsePositiveMinimizerConfig GetDefaultConfig();
-
-        /**
-         * @brief Update configuration
-         * @param config New configuration
-         */
-        void UpdateConfiguration(const FalsePositiveMinimizerConfig& config);
+        // static FalsePositiveMinimizerConfig GetDefaultConfig(); // Potentially obsolete
+        // void UpdateConfiguration(const FalsePositiveMinimizerConfig& config); // Potentially obsolete or needs signature change
 
     private:
         /**
@@ -384,7 +371,8 @@ namespace CryptoShield::Detection {
 
     private:
         // Configuration
-        FalsePositiveMinimizerConfig config_;
+        // FalsePositiveMinimizerConfig config_; // Old config storage
+        CryptoShield::Detection::DetectionEngineConfig::FalsePositiveConfig config_; // New config storage
 
         // Legitimate process database
         mutable std::mutex processes_mutex_;

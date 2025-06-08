@@ -25,47 +25,12 @@
 namespace CryptoShield::Detection {
 
     // Static member definitions
-    const std::vector<std::wstring> FalsePositiveMinimizer::BACKUP_SOFTWARE = {
-        L"Acronis", L"TrueImage", L"BackupExec", L"Veeam", L"ShadowProtect",
-        L"Macrium", L"EaseUS", L"AOMEI", L"Paragon", L"Cobian",
-        L"FreeFileSync", L"SyncBack", L"GoodSync", L"Duplicati", L"BackBlaze",
-        L"CrashPlan", L"Carbonite", L"IDrive", L"pCloud", L"SpiderOak"
-    };
-
-    const std::vector<std::wstring> FalsePositiveMinimizer::COMPRESSION_SOFTWARE = {
-        L"WinRAR", L"7-Zip", L"7z", L"WinZip", L"PeaZip",
-        L"Bandizip", L"IZArc", L"PowerArchiver", L"ZipGenius", L"FreeArc",
-        L"HaoZip", L"B1Archiver", L"Hamster", L"Express Zip", L"ALZip"
-    };
-
-    const std::vector<std::wstring> FalsePositiveMinimizer::MEDIA_SOFTWARE = {
-        L"HandBrake", L"FFmpeg", L"VLC", L"OBS", L"Adobe Premiere",
-        L"Adobe After Effects", L"DaVinci Resolve", L"Sony Vegas", L"Camtasia",
-        L"Audacity", L"FL Studio", L"Ableton", L"Pro Tools", L"Media Encoder",
-        L"Format Factory", L"Any Video Converter", L"Freemake", L"MKVToolNix"
-    };
-
-    const std::vector<std::wstring> FalsePositiveMinimizer::DEVELOPMENT_SOFTWARE = {
-        L"devenv", L"Visual Studio", L"VSCode", L"Code", L"eclipse",
-        L"IntelliJ", L"PyCharm", L"WebStorm", L"Android Studio", L"Xcode",
-        L"gcc", L"g++", L"clang", L"cl.exe", L"javac",
-        L"python", L"node", L"npm", L"dotnet", L"go",
-        L"rustc", L"cargo", L"gradle", L"maven", L"make"
-    };
-
-    const std::vector<std::wstring> FalsePositiveMinimizer::SYSTEM_SOFTWARE = {
-        L"TrustedInstaller", L"svchost", L"services", L"lsass", L"csrss",
-        L"wininit", L"winlogon", L"explorer", L"taskmgr", L"mmc",
-        L"dism", L"sfc", L"chkdsk", L"defrag", L"cleanmgr",
-        L"SystemSettings", L"UserAccountControlSettings", L"CompMgmtLauncher"
-    };
-
-    const std::vector<std::wstring> FalsePositiveMinimizer::SECURITY_SOFTWARE = {
-        L"MsMpEng", L"Windows Defender", L"MBAMService", L"Malwarebytes",
-        L"avp", L"Kaspersky", L"avgnt", L"Avira", L"mcshield",
-        L"McAfee", L"bdagent", L"Bitdefender", L"NortonSecurity", L"360se",
-        L"ESET", L"nod32", L"Sophos", L"SAVService", L"CylanceSvc"
-    };
+    // const std::vector<std::wstring> FalsePositiveMinimizer::BACKUP_SOFTWARE = { ... }; // DELETE
+    // const std::vector<std::wstring> FalsePositiveMinimizer::COMPRESSION_SOFTWARE = { ... }; // DELETE
+    // const std::vector<std::wstring> FalsePositiveMinimizer::MEDIA_SOFTWARE = { ... }; // DELETE
+    // const std::vector<std::wstring> FalsePositiveMinimizer::DEVELOPMENT_SOFTWARE = { ... }; // DELETE
+    // const std::vector<std::wstring> FalsePositiveMinimizer::SYSTEM_SOFTWARE = { ... }; // DELETE
+    // const std::vector<std::wstring> FalsePositiveMinimizer::SECURITY_SOFTWARE = { ... }; // DELETE
 
     const std::map<SoftwareCategory, std::vector<std::wstring>>
         FalsePositiveMinimizer::LEGITIMATE_EXTENSIONS = {
@@ -91,27 +56,16 @@ namespace CryptoShield::Detection {
             }}
     };
 
-    const std::vector<std::wstring> FalsePositiveMinimizer::TRUSTED_PUBLISHERS = {
-        L"Microsoft Corporation", L"Microsoft Windows",
-        L"Adobe Inc.", L"Adobe Systems Incorporated",
-        L"Google LLC", L"Google Inc",
-        L"Mozilla Corporation", L"Apple Inc.",
-        L"Oracle Corporation", L"Intel Corporation",
-        L"NVIDIA Corporation", L"AMD Inc.",
-        L"Symantec Corporation", L"McAfee, Inc.",
-        L"Kaspersky Lab", L"Bitdefender SRL",
-        L"ESET, spol. s r.o.", L"Avast Software s.r.o.",
-        L"Malwarebytes Inc.", L"Sophos Ltd."
-    };
+    // const std::vector<std::wstring> FalsePositiveMinimizer::TRUSTED_PUBLISHERS = { ... }; // DELETE
 
     /**
      * @brief Constructor
      */
-    FalsePositiveMinimizer::FalsePositiveMinimizer(
-        const FalsePositiveMinimizerConfig& config)
-        : config_(config)
-        , statistics_{}
-    {
+    FalsePositiveMinimizer::FalsePositiveMinimizer(const CryptoShield::Detection::DetectionEngineConfig::FalsePositiveConfig& config)
+        : config_(config), // Initialize the member
+          statistics_{} {
+        // Existing constructor body, like Initialize()
+        // Initialize(); // Will be called after construction by TraditionalEngine typically
     }
 
     /**
@@ -149,7 +103,7 @@ namespace CryptoShield::Detection {
         std::lock_guard<std::mutex> lock(processes_mutex_);
 
         // Backup software
-        for (const auto& name : BACKUP_SOFTWARE) {
+        for (const auto& name : config_.trusted_backup_software) { // Use config list
             LegitimateProcess proc;
             proc.process_name = name;
             proc.category = SoftwareCategory::BACKUP_SOFTWARE;
@@ -168,7 +122,7 @@ namespace CryptoShield::Detection {
         }
 
         // Compression tools
-        for (const auto& name : COMPRESSION_SOFTWARE) {
+        for (const auto& name : config_.trusted_compression_software) { // Use config list
             LegitimateProcess proc;
             proc.process_name = name;
             proc.category = SoftwareCategory::COMPRESSION_TOOLS;
@@ -186,27 +140,13 @@ namespace CryptoShield::Detection {
             legitimate_processes_[name] = proc;
         }
 
-        // Media software
-        for (const auto& name : MEDIA_SOFTWARE) {
-            LegitimateProcess proc;
-            proc.process_name = name;
-            proc.category = SoftwareCategory::MEDIA_ENCODERS;
-            proc.trust_score = 0.8;
-            proc.requires_signature = false;
-            proc.allowed_extensions = LEGITIMATE_EXTENSIONS.at(SoftwareCategory::MEDIA_ENCODERS);
-            proc.typical_behaviors = {
-                L"MEDIA_FILE_ACCESS",
-                L"HIGH_CPU_USAGE",
-                L"TEMP_FILE_CREATION",
-                L"SEQUENTIAL_WRITE"
-            };
-            proc.last_updated = std::chrono::system_clock::now();
-
-            legitimate_processes_[name] = proc;
-        }
+        // Media software (Removed as MEDIA_SOFTWARE list is removed)
+        // for (const auto& name : MEDIA_SOFTWARE) {
+        // ...
+        // }
 
         // Development tools
-        for (const auto& name : DEVELOPMENT_SOFTWARE) {
+        for (const auto& name : config_.trusted_dev_software) { // Use config list
             LegitimateProcess proc;
             proc.process_name = name;
             proc.category = SoftwareCategory::DEVELOPMENT_TOOLS;
@@ -225,7 +165,7 @@ namespace CryptoShield::Detection {
         }
 
         // System software - highest trust
-        for (const auto& name : SYSTEM_SOFTWARE) {
+        for (const auto& name : config_.trusted_system_software) { // Use config list
             LegitimateProcess proc;
             proc.process_name = name;
             proc.category = SoftwareCategory::SYSTEM_UTILITIES;
@@ -403,8 +343,8 @@ namespace CryptoShield::Detection {
                 );
 
                 // Check if trusted publisher
-                if (std::find(TRUSTED_PUBLISHERS.begin(), TRUSTED_PUBLISHERS.end(),
-                    signer_name) != TRUSTED_PUBLISHERS.end()) {
+                if (std::find(config_.trusted_publishers.begin(), config_.trusted_publishers.end(), // Use config list
+                    signer_name) != config_.trusted_publishers.end()) {
                     analysis.legitimacy_indicators.push_back(L"Trusted publisher");
                     analysis.false_positive_probability += 0.4;
                 }
@@ -604,11 +544,10 @@ namespace CryptoShield::Detection {
         std::wstring lower_name = process_name;
         std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::towlower);
 
-        for (const auto& tool : COMPRESSION_SOFTWARE) {
-            std::wstring lower_tool = tool;
-            std::transform(lower_tool.begin(), lower_tool.end(), lower_tool.begin(), ::towlower);
-
-            if (lower_name.find(lower_tool) != std::wstring::npos) {
+        for (const auto& tool_pattern : config_.trusted_compression_software) { // Use config list
+            std::wstring lower_tool_pattern = tool_pattern;
+            std::transform(lower_tool_pattern.begin(), lower_tool_pattern.end(), lower_tool_pattern.begin(), ::towlower);
+            if (lower_name.find(lower_tool_pattern) != std::wstring::npos) {
                 is_known_tool = true;
                 break;
             }
@@ -659,19 +598,36 @@ namespace CryptoShield::Detection {
         std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::towlower);
 
         // Check each category
-        for (const auto& backup : BACKUP_SOFTWARE) {
-            std::wstring lower_backup = backup;
-            std::transform(lower_backup.begin(), lower_backup.end(), lower_backup.begin(), ::towlower);
-            if (lower_name.find(lower_backup) != std::wstring::npos) {
+        for (const auto& backup_name_pattern : config_.trusted_backup_software) { // Use config list
+            std::wstring lower_backup_pattern = backup_name_pattern;
+            std::transform(lower_backup_pattern.begin(), lower_backup_pattern.end(), lower_backup_pattern.begin(), ::towlower);
+            if (lower_name.find(lower_backup_pattern) != std::wstring::npos) {
                 return SoftwareCategory::BACKUP_SOFTWARE;
             }
         }
 
-        for (const auto& compress : COMPRESSION_SOFTWARE) {
-            std::wstring lower_compress = compress;
-            std::transform(lower_compress.begin(), lower_compress.end(), lower_compress.begin(), ::towlower);
-            if (lower_name.find(lower_compress) != std::wstring::npos) {
+        for (const auto& compress_name_pattern : config_.trusted_compression_software) { // Use config list
+            std::wstring lower_compress_pattern = compress_name_pattern;
+            std::transform(lower_compress_pattern.begin(), lower_compress_pattern.end(), lower_compress_pattern.begin(), ::towlower);
+            if (lower_name.find(lower_compress_pattern) != std::wstring::npos) {
                 return SoftwareCategory::COMPRESSION_TOOLS;
+            }
+        }
+        // MEDIA_SOFTWARE and SECURITY_SOFTWARE checks would be removed or adapted if they were here
+        // For DEVELOPMENT_SOFTWARE
+        for (const auto& dev_name_pattern : config_.trusted_dev_software) { // Use config list
+            std::wstring lower_dev_pattern = dev_name_pattern;
+            std::transform(lower_dev_pattern.begin(), lower_dev_pattern.end(), lower_dev_pattern.begin(), ::towlower);
+            if (lower_name.find(lower_dev_pattern) != std::wstring::npos) {
+                return SoftwareCategory::DEVELOPMENT_TOOLS;
+            }
+        }
+        // For SYSTEM_SOFTWARE
+        for (const auto& system_name_pattern : config_.trusted_system_software) { // Use config list
+            std::wstring lower_system_pattern = system_name_pattern;
+            std::transform(lower_system_pattern.begin(), lower_system_pattern.end(), lower_system_pattern.begin(), ::towlower);
+            if (lower_name.find(lower_system_pattern) != std::wstring::npos) {
+                return SoftwareCategory::SYSTEM_UTILITIES;
             }
         }
 
@@ -1014,10 +970,10 @@ namespace CryptoShield::Detection {
         std::wstring lower_name = process_name;
         std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::towlower);
 
-        for (const auto& tool : DEVELOPMENT_SOFTWARE) {
-            std::wstring lower_tool = tool;
-            std::transform(lower_tool.begin(), lower_tool.end(), lower_tool.begin(), ::towlower);
-            if (lower_name.find(lower_tool) != std::wstring::npos) {
+        for (const auto& tool_pattern : config_.trusted_dev_software) { // Use config list
+            std::wstring lower_tool_pattern = tool_pattern;
+            std::transform(lower_tool_pattern.begin(), lower_tool_pattern.end(), lower_tool_pattern.begin(), ::towlower);
+            if (lower_name.find(lower_tool_pattern) != std::wstring::npos) {
                 is_dev_tool = true;
                 break;
             }

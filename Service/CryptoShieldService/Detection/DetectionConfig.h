@@ -97,6 +97,7 @@ namespace CryptoShield::Detection {
             bool track_temporal_patterns;
             std::vector<std::wstring> suspicious_extensions;
             double suspicion_score_threshold;
+            std::vector<std::wstring> suspicious_patterns_regex;
         } behavioral;
 
         // System activity monitoring configuration
@@ -160,6 +161,11 @@ namespace CryptoShield::Detection {
             bool strict_mode;
             std::wstring whitelist_file;
             std::wstring reputation_database;
+            std::vector<std::wstring> trusted_publishers;
+            std::vector<std::wstring> trusted_backup_software;
+            std::vector<std::wstring> trusted_compression_software;
+            std::vector<std::wstring> trusted_dev_software;
+            std::vector<std::wstring> trusted_system_software;
         } false_positive;
 
         // Response configuration

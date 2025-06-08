@@ -10,6 +10,7 @@
 #pragma once
 
 #include "../CommunicationManager.h"
+#include "DetectionConfig.h" // Added
 #include <windows.h>
 #include <vector>
 #include <queue>
@@ -211,11 +212,8 @@ namespace CryptoShield::Detection {
      */
     class FileExtensionMonitor {
     public:
-        /**
-         * @brief Constructor
-         */
-        FileExtensionMonitor();
-
+        // Modify constructor
+        explicit FileExtensionMonitor(const CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig& config);
         /**
          * @brief Destructor
          */
@@ -289,6 +287,9 @@ namespace CryptoShield::Detection {
         // Original extension tracking
         std::unordered_map<std::wstring, std::wstring> original_extensions_;
         mutable std::mutex extensions_mutex_;
+
+        // Add config member
+        CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig config_;
     };
 
     /**
@@ -379,11 +380,8 @@ namespace CryptoShield::Detection {
      */
     class BehavioralDetector {
     public:
-        /**
-         * @brief Constructor
-         */
-        BehavioralDetector();
-
+        // Modify constructor
+        explicit BehavioralDetector(const CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig& config);
         /**
          * @brief Destructor
          */
@@ -483,7 +481,8 @@ namespace CryptoShield::Detection {
         mutable std::atomic<size_t> suspicious_patterns_detected_;
 
         // Configuration
-        MassFileModificationDetector::Configuration config_;
+        // MassFileModificationDetector::Configuration config_; // This line is replaced
+        CryptoShield::Detection::DetectionEngineConfig::BehavioralConfig config_; // New config storage
     };
 
 } // namespace CryptoShield::Detection
