@@ -87,23 +87,25 @@
     <DriverSign>
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
-    <ClCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
+    <ClCompile />
     <Link>
       <AdditionalDependencies>fltmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DriverSign>
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
-    <ClCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
+    <ClCompile />
     <Link>
       <AdditionalDependencies>fltmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <DriverSign>
@@ -127,6 +129,8 @@
   <ItemGroup>
     <ClInclude Include="CryptoShield.h" />
     <ClInclude Include="Protection\CallbackProtection.h" />
+    <ClInclude Include="Protection\HookDetection.h" />
+    <ClInclude Include="Protection\MemoryIntegrity.h" />
     <ClInclude Include="Protection\SelfProtection.h" />
   </ItemGroup>
   <ItemGroup>
@@ -134,6 +138,8 @@
     <ClCompile Include="CryptoShield.c" />
     <ClCompile Include="FileMonitor.c" />
     <ClCompile Include="Protection\CallbackProtection.c" />
+    <ClCompile Include="Protection\HookDetection.c" />
+    <ClCompile Include="Protection\MemoryIntegrity.c" />
     <ClCompile Include="Protection\SelfProtection.c" />
     <ClCompile Include="Utilities.c" />
   </ItemGroup>

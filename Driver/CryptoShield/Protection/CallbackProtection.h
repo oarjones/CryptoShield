@@ -14,6 +14,7 @@
 #include <fltKernel.h>
 #include "SelfProtection.h"
 
+
  // Protection status for callbacks
 #define CALLBACK_STATUS_CLEAN           0x00000000
 #define CALLBACK_STATUS_HOOKED          0x00000001
