@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <ntddk.h>
+//#include <ntddk.h>
 #include <fltKernel.h>
 #include "SelfProtection.h"
 

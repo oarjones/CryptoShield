@@ -32,19 +32,16 @@ static const UCHAR COMMON_PROLOGUES[][4] = {
 /**
  * @brief Initialize callback protection system
  */
-PCALLBACK_PROTECTION InitializeCallbackProtection(
-    _In_ PFLT_FILTER FilterHandle)
+PCALLBACK_PROTECTION InitializeCallbackProtection(VOID) // Firma actualizada
 {
     PCALLBACK_PROTECTION protection;
-    NTSTATUS status;
+    extern CONST FLT_OPERATION_REGISTRATION Callbacks[]; // Usa la tabla global del driver
+    SIZE_T tableSize = 0;
+    ULONG i;
 
-    if (!FilterHandle) {
-        return NULL;
-    }
-
-    // Allocate protection context
-    protection = (PCALLBACK_PROTECTION)ExAllocatePoolWithTag(
-        NonPagedPool,
+    // Asignar memoria para el contexto de protección
+    protection = (PCALLBACK_PROTECTION)ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
         sizeof(CALLBACK_PROTECTION),
         CALLBACK_PROTECTION_TAG
     );
@@ -56,22 +53,18 @@ PCALLBACK_PROTECTION InitializeCallbackProtection(
 
     RtlZeroMemory(protection, sizeof(CALLBACK_PROTECTION));
 
-    // Get callback table information
-    status = GetCallbackTableFromFilter(FilterHandle,
-        &protection->OriginalCallbacks,
-        &protection->TableSize);
-
-    if (!NT_SUCCESS(status)) {
-        DbgPrint("[CryptoShield] Failed to get callback table: 0x%08X\n", status);
-        ExFreePoolWithTag(protection, CALLBACK_PROTECTION_TAG);
-        return NULL;
+    // Calcular el tamaño de la tabla de callbacks
+    for (i = 0; Callbacks[i].MajorFunction != IRP_MJ_OPERATION_END; i++) {
+        tableSize += sizeof(FLT_OPERATION_REGISTRATION);
     }
+    tableSize += sizeof(FLT_OPERATION_REGISTRATION); // Añadir el terminador
 
-    // Count callbacks
-    protection->CallbackCount = 0;
-    for (ULONG i = 0; protection->OriginalCallbacks[i].MajorFunction != IRP_MJ_OPERATION_END; i++) {
-        protection->CallbackCount++;
-    }
+    // Guardar la información de la tabla
+    protection->OriginalCallbacks = (PFLT_OPERATION_REGISTRATION)Callbacks;
+    protection->TableSize = (ULONG)tableSize;
+
+    // Contar los callbacks
+    protection->CallbackCount = i;
 
     DbgPrint("[CryptoShield] Callback protection initialized. Count: %lu, Size: %lu bytes\n",
         protection->CallbackCount, protection->TableSize);
@@ -117,12 +110,9 @@ VOID CleanupCallbackProtection(
  * @brief Protect filter callbacks with advanced techniques
  */
 NTSTATUS ProtectFilterCallbacks(
-    _In_ PCALLBACK_PROTECTION Protection,
-    _In_ PFLT_FILTER FilterHandle)
+    _In_ PCALLBACK_PROTECTION Protection)
 {
     NTSTATUS status;
-
-    UNREFERENCED_PARAMETER(FilterHandle);
 
     if (!Protection || !Protection->OriginalCallbacks) {
         return STATUS_INVALID_PARAMETER;
@@ -461,8 +451,13 @@ NTSTATUS CreateCallbackBackup(
     }
 
     // Allocate backup memory
-    Protection->BackupCallbackMemory = ExAllocatePoolWithTag(
+    /*Protection->BackupCallbackMemory = ExAllocatePoolWithTag(
         NonPagedPool,
+        Protection->TableSize,
+        CALLBACK_PROTECTION_TAG
+    );*/
+    Protection->BackupCallbackMemory = ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
         Protection->TableSize,
         CALLBACK_PROTECTION_TAG
     );
@@ -633,38 +628,38 @@ BOOLEAN ValidateFunctionPrologue(
     return isValid;
 }
 
-/**
- * @brief Get callback table from filter
- */
-NTSTATUS GetCallbackTableFromFilter(
-    _In_ PFLT_FILTER FilterHandle,
-    _Out_ PFLT_OPERATION_REGISTRATION* CallbackTable,
-    _Out_ PULONG TableSize)
-{
-    PFLT_OPERATION_REGISTRATION callbacks;
-    ULONG size = 0;
-    ULONG count = 0;
-
-    if (!FilterHandle || !CallbackTable || !TableSize) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    // This is a simplified approach - in production you'd need proper parsing
-    // For now, we assume callbacks follow the filter structure
-    callbacks = (PFLT_OPERATION_REGISTRATION)((PUCHAR)FilterHandle + sizeof(FLT_FILTER));
-
-    // Count callbacks and calculate size
-    while (callbacks[count].MajorFunction != IRP_MJ_OPERATION_END) {
-        count++;
-        size += sizeof(FLT_OPERATION_REGISTRATION);
-    }
-    size += sizeof(FLT_OPERATION_REGISTRATION); // For terminator
-
-    *CallbackTable = callbacks;
-    *TableSize = size;
-
-    return STATUS_SUCCESS;
-}
+///**
+// * @brief Get callback table from filter
+// */
+//NTSTATUS GetCallbackTableFromFilter(
+//    _In_ PFLT_FILTER FilterHandle,
+//    _Out_ PFLT_OPERATION_REGISTRATION* CallbackTable,
+//    _Out_ PULONG TableSize)
+//{
+//    PFLT_OPERATION_REGISTRATION callbacks;
+//    ULONG size = 0;
+//    ULONG count = 0;
+//
+//    if (!FilterHandle || !CallbackTable || !TableSize) {
+//        return STATUS_INVALID_PARAMETER;
+//    }
+//
+//    // This is a simplified approach - in production you'd need proper parsing
+//    // For now, we assume callbacks follow the filter structure
+//    callbacks = (PFLT_OPERATION_REGISTRATION)((PUCHAR)FilterHandle + sizeof(FLT_FILTER));
+//
+//    // Count callbacks and calculate size
+//    while (callbacks[count].MajorFunction != IRP_MJ_OPERATION_END) {
+//        count++;
+//        size += sizeof(FLT_OPERATION_REGISTRATION);
+//    }
+//    size += sizeof(FLT_OPERATION_REGISTRATION); // For terminator
+//
+//    *CallbackTable = callbacks;
+//    *TableSize = size;
+//
+//    return STATUS_SUCCESS;
+//}
 
 /**
  * @brief Log callback protection event

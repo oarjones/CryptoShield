@@ -57,8 +57,13 @@ PHOOK_DETECTION_CONTEXT InitializeHookDetection(
     DbgPrint("[CryptoShield] Initializing hook detection system\n");
 
     // Allocate detection context
-    detectionContext = (PHOOK_DETECTION_CONTEXT)ExAllocatePoolWithTag(
+    /*detectionContext = (PHOOK_DETECTION_CONTEXT)ExAllocatePoolWithTag(
         NonPagedPool,
+        sizeof(HOOK_DETECTION_CONTEXT),
+        HOOK_DETECT_TAG
+    );*/
+    detectionContext = (PHOOK_DETECTION_CONTEXT)ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
         sizeof(HOOK_DETECTION_CONTEXT),
         HOOK_DETECT_TAG
     );
@@ -94,8 +99,13 @@ PHOOK_DETECTION_CONTEXT InitializeHookDetection(
             detectionContext->SsdtBase, detectionContext->SsdtEntries);
 
         // Allocate and save original SSDT
-        detectionContext->OriginalSsdtTable = (PVOID*)ExAllocatePoolWithTag(
+        /*detectionContext->OriginalSsdtTable = (PVOID*)ExAllocatePoolWithTag(
             NonPagedPool,
+            detectionContext->SsdtEntries * sizeof(PVOID),
+            HOOK_DETECT_TAG
+        );*/
+        detectionContext->OriginalSsdtTable = (PVOID*)ExAllocatePool2(
+            POOL_FLAG_NON_PAGED,
             detectionContext->SsdtEntries * sizeof(PVOID),
             HOOK_DETECT_TAG
         );

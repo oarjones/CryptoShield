@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <ntddk.h>
+//#include <ntddk.h>
 #include <fltKernel.h>
 #include "../CryptoShield.h"
 
@@ -67,11 +67,11 @@ typedef struct _PROTECTION_CONTEXT {
     KIRQL OldIrql;
 
     // Statistics
-    ULONG IntegrityChecksPerformed;
-    ULONG TamperAttemptsDetected;
-    ULONG SelfHealingActivations;
-    ULONG HooksDetected;
-    ULONG HooksRemoved;
+    volatile LONG64 IntegrityChecksPerformed;
+    volatile LONG64 TamperAttemptsDetected;
+    volatile LONG64 SelfHealingActivations;
+    volatile LONG64 HooksDetected;
+    volatile LONG64 HooksRemoved;
 
     // Protected memory regions
     struct {
@@ -87,8 +87,8 @@ typedef struct _PROTECTION_CONTEXT {
 // Tamper detection event
 typedef struct _TAMPER_EVENT {
     LARGE_INTEGER Timestamp;
-    ULONG ProcessId;
-    ULONG ThreadId;
+    ULONG_PTR ProcessId;
+    ULONG_PTR ThreadId;
     ULONG TamperType;
     PVOID TargetAddress;
     CHAR Description[256];

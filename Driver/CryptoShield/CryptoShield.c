@@ -96,6 +96,8 @@ NTSTATUS DriverEntry(
 
     UNREFERENCED_PARAMETER(RegistryPath);
 
+    
+
     CS_LOG_INFO("CryptoShield driver loading, version %ws", CRYPTOSHIELD_VERSION_STRING);
 
     // Inicializar el contexto global del driver

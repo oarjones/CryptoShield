@@ -37,8 +37,13 @@ PINTEGRITY_CONTEXT InitializeMemoryIntegrity(
     DbgPrint("[CryptoShield] Initializing memory integrity system\n");
 
     // Allocate integrity context
-    integrityContext = (PINTEGRITY_CONTEXT)ExAllocatePoolWithTag(
+    /*integrityContext = (PINTEGRITY_CONTEXT)ExAllocatePoolWithTag(
         NonPagedPool,
+        sizeof(INTEGRITY_CONTEXT),
+        INTEGRITY_TAG
+    );*/
+    integrityContext = (PINTEGRITY_CONTEXT)ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
         sizeof(INTEGRITY_CONTEXT),
         INTEGRITY_TAG
     );
@@ -436,7 +441,9 @@ NTSTATUS CreateRegionBackup(
 
     // Allocate backup buffer if not already allocated
     if (!Region->BackupAddresses[backupIndex]) {
-        backupBuffer = ExAllocatePoolWithTag(NonPagedPool, Region->Size, INTEGRITY_TAG);
+        /*backupBuffer = ExAllocatePoolWithTag(NonPagedPool, Region->Size, INTEGRITY_TAG);*/
+        backupBuffer = ExAllocatePool2(POOL_FLAG_NON_PAGED, Region->Size, INTEGRITY_TAG);
+
         if (!backupBuffer) {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
@@ -697,8 +704,13 @@ static NTSTATUS AllocateRegionBackups(PMEMORY_REGION Region)
     ULONG i;
 
     for (i = 0; i < MAX_BACKUP_COPIES; i++) {
-        Region->BackupAddresses[i] = ExAllocatePoolWithTag(
+        /*Region->BackupAddresses[i] = ExAllocatePoolWithTag(
             NonPagedPool,
+            Region->Size,
+            INTEGRITY_TAG
+        );*/
+        Region->BackupAddresses[i] = ExAllocatePool2(
+            POOL_FLAG_NON_PAGED,
             Region->Size,
             INTEGRITY_TAG
         );

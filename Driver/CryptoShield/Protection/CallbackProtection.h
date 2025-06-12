@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <ntddk.h>
+//#include <ntddk.h>
 #include <fltKernel.h>
 #include "SelfProtection.h"
 
@@ -98,7 +98,7 @@ typedef struct _CALLBACK_VERIFICATION_RESULT {
  * @return Allocated protection context or NULL on failure
  */
 PCALLBACK_PROTECTION InitializeCallbackProtection(
-    _In_ PFLT_FILTER FilterHandle
+    VOID
 );
 
 /**
@@ -116,8 +116,7 @@ VOID CleanupCallbackProtection(
  * @return STATUS_SUCCESS on success
  */
 NTSTATUS ProtectFilterCallbacks(
-    _In_ PCALLBACK_PROTECTION Protection,
-    _In_ PFLT_FILTER FilterHandle
+    _In_ PCALLBACK_PROTECTION Protection
 );
 
 /**
@@ -273,11 +272,11 @@ BOOLEAN ValidateFunctionPrologue(
  * @param TableSize Output table size
  * @return STATUS_SUCCESS on success
  */
-NTSTATUS GetCallbackTableFromFilter(
-    _In_ PFLT_FILTER FilterHandle,
-    _Out_ PFLT_OPERATION_REGISTRATION* CallbackTable,
-    _Out_ PULONG TableSize
-);
+//NTSTATUS GetCallbackTableFromFilter(
+//    _In_ PFLT_FILTER FilterHandle,
+//    _Out_ PFLT_OPERATION_REGISTRATION* CallbackTable,
+//    _Out_ PULONG TableSize
+//);
 
 /**
  * @brief Disassemble instruction at address

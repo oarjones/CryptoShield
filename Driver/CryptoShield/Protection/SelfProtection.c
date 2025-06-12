@@ -203,13 +203,13 @@ VOID IntegrityCheckDpc(
     }
 
     // Increment check counter
-    InterlockedIncrement(&context->IntegrityChecksPerformed);
+    InterlockedIncrement64(&context->IntegrityChecksPerformed);
 
     // Detect memory tampering
     tamperCount = DetectMemoryTampering(context);
     if (tamperCount > 0) {
         DbgPrint("[CryptoShield] WARNING: Detected %lu tampering attempts!\n", tamperCount);
-        InterlockedAdd(&context->TamperAttemptsDetected, tamperCount);
+        InterlockedAdd64(&context->TamperAttemptsDetected, tamperCount);
 
         // Check if we exceeded tamper threshold
         if (context->TamperAttempts >= context->MaxTamperAttempts) {
@@ -227,7 +227,7 @@ VOID IntegrityCheckDpc(
         if (context->SelfHealingEnabled) {
             status = TriggerSelfHealing(context);
             if (NT_SUCCESS(status)) {
-                InterlockedIncrement(&context->SelfHealingActivations);
+                InterlockedIncrement64(&context->SelfHealingActivations);
             }
         }
     }
@@ -248,46 +248,82 @@ VOID IntegrityCheckDpc(
 NTSTATUS ProtectCallbackTable(
     _In_ PPROTECTION_CONTEXT Context)
 {
-    PFLT_FILTER filter;
-    PFLT_OPERATION_REGISTRATION callbacks;
+    //PFLT_FILTER filter;
+    //PFLT_OPERATION_REGISTRATION callbacks;
+    //SIZE_T tableSize = 0;
+    //ULONG i;
+
+    //if (!Context || !Context->FilterHandle) {
+    //    return STATUS_INVALID_PARAMETER;
+    //}
+
+    //filter = Context->FilterHandle;
+
+    //// Get callback table from filter
+    //// Note: This is a simplified approach. In production, you'd need to
+    //// parse the filter structure more carefully
+    //callbacks = (PFLT_OPERATION_REGISTRATION)((PUCHAR)filter + sizeof(FLT_FILTER));
+
+    //// Calculate table size
+    //for (i = 0; callbacks[i].MajorFunction != IRP_MJ_OPERATION_END; i++) {
+    //    tableSize += sizeof(FLT_OPERATION_REGISTRATION);
+    //}
+    //tableSize += sizeof(FLT_OPERATION_REGISTRATION); // For the terminator
+
+    //// Allocate backup buffer
+    //Context->CallbackTableBackup = ExAllocatePoolWithTag(NonPagedPool, tableSize, PROTECTION_TAG);
+    //if (!Context->CallbackTableBackup) {
+    //    return STATUS_INSUFFICIENT_RESOURCES;
+    //}
+
+    //// Create backup copy
+    //RtlCopyMemory(Context->CallbackTableBackup, callbacks, tableSize);
+    //Context->CallbackTableSize = (ULONG)tableSize;
+    //Context->OriginalCallbacks = callbacks;
+
+    //// Calculate checksum
+    //Context->OriginalChecksum = CalculateChecksum(callbacks, (ULONG)tableSize);
+
+    //DbgPrint("[CryptoShield] Callback table protected. Size: %lu, Checksum: 0x%08X\n",
+    //    tableSize, Context->OriginalChecksum);
+
+    //return STATUS_SUCCESS;
+
+    // La tabla de callbacks es la que definimos globalmente en CryptoShield.c
+    extern CONST FLT_OPERATION_REGISTRATION Callbacks[];
     SIZE_T tableSize = 0;
     ULONG i;
 
-    if (!Context || !Context->FilterHandle) {
+    if (!Context) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    filter = Context->FilterHandle;
-
-    // Get callback table from filter
-    // Note: This is a simplified approach. In production, you'd need to
-    // parse the filter structure more carefully
-    callbacks = (PFLT_OPERATION_REGISTRATION)((PUCHAR)filter + sizeof(FLT_FILTER));
-
-    // Calculate table size
-    for (i = 0; callbacks[i].MajorFunction != IRP_MJ_OPERATION_END; i++) {
+    // Calcular el tamaño real de nuestra tabla de callbacks
+    for (i = 0; Callbacks[i].MajorFunction != IRP_MJ_OPERATION_END; i++) {
         tableSize += sizeof(FLT_OPERATION_REGISTRATION);
     }
-    tableSize += sizeof(FLT_OPERATION_REGISTRATION); // For the terminator
+    tableSize += sizeof(FLT_OPERATION_REGISTRATION); // Sumar el terminador IRP_MJ_OPERATION_END
 
-    // Allocate backup buffer
-    Context->CallbackTableBackup = ExAllocatePoolWithTag(NonPagedPool, tableSize, PROTECTION_TAG);
+    // Asignar memoria para la copia de seguridad
+    Context->CallbackTableBackup = ExAllocatePool2(POOL_FLAG_NON_PAGED, tableSize, PROTECTION_TAG);
     if (!Context->CallbackTableBackup) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    // Create backup copy
-    RtlCopyMemory(Context->CallbackTableBackup, callbacks, tableSize);
+    // Crear la copia de seguridad
+    RtlCopyMemory(Context->CallbackTableBackup, (PVOID)Callbacks, tableSize);
     Context->CallbackTableSize = (ULONG)tableSize;
-    Context->OriginalCallbacks = callbacks;
+    Context->OriginalCallbacks = (PFLT_OPERATION_REGISTRATION)Callbacks;
 
-    // Calculate checksum
-    Context->OriginalChecksum = CalculateChecksum(callbacks, (ULONG)tableSize);
+    // Calcular el checksum inicial
+    Context->OriginalChecksum = CalculateChecksum((PVOID)Callbacks, (ULONG)tableSize);
 
     DbgPrint("[CryptoShield] Callback table protected. Size: %lu, Checksum: 0x%08X\n",
-        tableSize, Context->OriginalChecksum);
+        (ULONG)tableSize, Context->OriginalChecksum);
 
     return STATUS_SUCCESS;
+
+
 }
 
 /**
@@ -318,8 +354,10 @@ ULONG DetectMemoryTampering(
                 // Log tamper event
                 TAMPER_EVENT event = { 0 };
                 KeQuerySystemTime(&event.Timestamp);
-                event.ProcessId = (ULONG)PsGetCurrentProcessId();
-                event.ThreadId = (ULONG)PsGetCurrentThreadId();
+                /*event.ProcessId = (ULONG)PsGetCurrentProcessId();
+                event.ThreadId = (ULONG)PsGetCurrentThreadId();*/
+                event.ProcessId = (ULONG_PTR)PsGetCurrentProcessId();
+                event.ThreadId = (ULONG_PTR)PsGetCurrentThreadId();
                 event.TamperType = PROTECTION_STATUS_TAMPERED;
                 event.TargetAddress = Context->OriginalCallbacks;
 
