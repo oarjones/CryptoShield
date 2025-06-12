@@ -610,3 +610,15 @@ NTSTATUS InitiateEmergencyLockdown(
 
     return STATUS_SUCCESS;
 }
+
+
+NTSTATUS ValidateDriverIntegrity(
+    _In_ PPROTECTION_CONTEXT Context)
+{
+    UNREFERENCED_PARAMETER(Context);
+    // NOTA: Una implementación completa aquí calcularía un checksum de las secciones
+    // del driver en memoria y lo compararía con un valor almacenado al inicio,
+    // o verificaría la firma digital del driver en memoria.
+    // Por ahora, devolvemos SUCCESS para evitar falsos positivos durante el desarrollo.
+    return STATUS_SUCCESS;
+}

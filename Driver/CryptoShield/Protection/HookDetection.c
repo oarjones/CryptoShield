@@ -691,3 +691,16 @@ VOID GetHookDetectionStatistics(
 
     KeReleaseSpinLock(&Context->DetectionLock, oldIrql);
 }
+
+NTSTATUS RestoreSSDTEntry(
+    _In_ ULONG ServiceIndex,
+    _In_ PVOID OriginalAddress)
+{
+    UNREFERENCED_PARAMETER(ServiceIndex);
+    UNREFERENCED_PARAMETER(OriginalAddress);
+    // NOTA: La modificación de la SSDT es una operación de alto riesgo que varía
+    // entre versiones de Windows y puede causar inestabilidad.
+    // Esta es una implementación placeholder para que el proyecto compile.
+    DbgPrint("[CryptoShield] RestoreSSDTEntry no está implementada.\n");
+    return STATUS_NOT_IMPLEMENTED;
+}

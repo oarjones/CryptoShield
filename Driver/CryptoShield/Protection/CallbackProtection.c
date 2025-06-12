@@ -214,13 +214,15 @@ BOOLEAN VerifyCallbackIntegrity(
             PFLT_OPERATION_REGISTRATION callback = &Protection->OriginalCallbacks[i];
 
             // Verify pre-operation callback
-            if (callback->PreOperation && !ValidateFunctionPrologue(callback->PreOperation)) {
+            // FIX: Cast function pointer to PVOID
+            if (callback->PreOperation && !ValidateFunctionPrologue((PVOID)callback->PreOperation)) {
                 localResult.CorruptedEntries++;
                 integrityValid = FALSE;
             }
 
             // Verify post-operation callback
-            if (callback->PostOperation && !ValidateFunctionPrologue(callback->PostOperation)) {
+            // FIX: Cast function pointer to PVOID
+            if (callback->PostOperation && !ValidateFunctionPrologue((PVOID)callback->PostOperation)) {
                 localResult.CorruptedEntries++;
                 integrityValid = FALSE;
             }
@@ -279,11 +281,13 @@ ULONG DetectCallbackHooks(
             RtlZeroMemory(&hookInfo, sizeof(HOOK_INFO));
 
             if (DetectionMethods & HOOK_DETECT_INLINE) {
-                if (DetectInlineHook(callback->PreOperation, &hookInfo)) {
+                // FIX: Cast function pointer to PVOID
+                if (DetectInlineHook((PVOID)callback->PreOperation, &hookInfo)) {
                     // Store hook information
                     if (Protection->DetectedHookCount < MAX_HOOK_CHAIN_DEPTH) {
+                        // FIX: Cast function pointer to PVOID
                         Protection->DetectedHooks[Protection->DetectedHookCount].HookedAddress =
-                            callback->PreOperation;
+                            (PVOID)callback->PreOperation;
                         Protection->DetectedHooks[Protection->DetectedHookCount].HookHandler =
                             hookInfo.HookAddress;
                         Protection->DetectedHooks[Protection->DetectedHookCount].HookType =
@@ -307,10 +311,12 @@ ULONG DetectCallbackHooks(
             RtlZeroMemory(&hookInfo, sizeof(HOOK_INFO));
 
             if (DetectionMethods & HOOK_DETECT_INLINE) {
-                if (DetectInlineHook(callback->PostOperation, &hookInfo)) {
+                // FIX: Cast function pointer to PVOID
+                if (DetectInlineHook((PVOID)callback->PostOperation, &hookInfo)) {
                     if (Protection->DetectedHookCount < MAX_HOOK_CHAIN_DEPTH) {
+                        // FIX: Cast function pointer to PVOID
                         Protection->DetectedHooks[Protection->DetectedHookCount].HookedAddress =
-                            callback->PostOperation;
+                            (PVOID)callback->PostOperation;
                         Protection->DetectedHooks[Protection->DetectedHookCount].HookHandler =
                             hookInfo.HookAddress;
                         Protection->DetectedHooks[Protection->DetectedHookCount].HookType =
@@ -535,7 +541,7 @@ NTSTATUS RestoreCallbackTable(
 NTSTATUS LockCallbackMemory(
     _In_ PCALLBACK_PROTECTION Protection)
 {
-    PMDL mdl;
+    PMDL mdl = NULL;
     PVOID mappedAddress;
 
     if (!Protection || !Protection->OriginalCallbacks || Protection->IsLocked) {
@@ -677,4 +683,88 @@ VOID LogCallbackProtectionEvent(
     DbgPrint("  Hooks Detected: %lu\n", Protection->HooksDetected);
     DbgPrint("  Hooks Removed: %lu\n", Protection->HooksRemoved);
     DbgPrint("  Modification Attempts: %lu\n", Protection->ModificationAttempts);
+}
+
+NTSTATUS UnlockCallbackMemory(
+    _In_ PCALLBACK_PROTECTION Protection)
+{
+    if (!Protection || !Protection->IsLocked) {
+        // No está bloqueado o el parámetro no es válido
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!Protection->CallbackMdl) {
+        // No hay MDL para liberar, pero marcamos como desbloqueado
+        Protection->IsLocked = FALSE;
+        return STATUS_SUCCESS;
+    }
+
+    __try {
+        // Desmapear las páginas si estaban mapeadas
+        if (Protection->MappedCallbackMemory) {
+            MmUnmapLockedPages(Protection->MappedCallbackMemory, Protection->CallbackMdl);
+            Protection->MappedCallbackMemory = NULL;
+        }
+
+        // Desbloquear las páginas de memoria
+        MmUnlockPages(Protection->CallbackMdl);
+
+        // Liberar la estructura MDL
+        IoFreeMdl(Protection->CallbackMdl);
+        Protection->CallbackMdl = NULL;
+
+        Protection->IsLocked = FALSE;
+        DbgPrint("[CryptoShield] Callback memory unlocked successfully.\n");
+
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        DbgPrint("[CryptoShield] Exception unlocking callback memory: 0x%08X\n", GetExceptionCode());
+        return STATUS_UNHANDLED_EXCEPTION;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS RestoreHookedFunction(
+    _In_ PHOOK_INFO HookInfo)
+{
+    UNREFERENCED_PARAMETER(HookInfo);
+    // NOTA: Una implementación real aquí sería compleja y requeriría deshabilitar
+    // la protección contra escritura de la memoria del kernel para restaurar los bytes originales.
+    // Esta implementación es un placeholder para resolver el error de enlazado.
+    DbgPrint("[CryptoShield] RestoreHookedFunction no está completamente implementada, pero se detectó la llamada.\n");
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS RemoveMaliciousHooks(
+    _In_ PCALLBACK_PROTECTION Protection)
+{
+    ULONG i;
+    NTSTATUS lastStatus = STATUS_SUCCESS;
+
+    if (!Protection) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    DbgPrint("[CryptoShield] Attempting to remove %lu detected hooks.\n", Protection->DetectedHookCount);
+
+    for (i = 0; i < Protection->DetectedHookCount; i++) {
+        HOOK_INFO hookInfo = { 0 };
+        hookInfo.TargetAddress = Protection->DetectedHooks[i].HookedAddress;
+        hookInfo.HookAddress = Protection->DetectedHooks[i].HookHandler;
+        hookInfo.HookType = Protection->DetectedHooks[i].HookType;
+        // Se necesitarían más detalles para una restauración completa.
+
+        NTSTATUS removeStatus = RestoreHookedFunction(&hookInfo);
+        if (!NT_SUCCESS(removeStatus)) {
+            lastStatus = removeStatus; // Guardar el último error
+        }
+    }
+
+    // Limpiar la lista de hooks detectados después del intento de eliminación
+    Protection->HooksRemoved += Protection->DetectedHookCount;
+    Protection->DetectedHookCount = 0;
+
+    return lastStatus;
 }

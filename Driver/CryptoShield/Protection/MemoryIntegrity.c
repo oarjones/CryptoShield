@@ -578,7 +578,7 @@ NTSTATUS AutoRepairRegion(
 NTSTATUS LockMemoryRegion(
     _In_ PMEMORY_REGION Region)
 {
-    PMDL mdl;
+    PMDL mdl = NULL;
 
     if (!Region || Region->IsLocked) {
         return STATUS_INVALID_PARAMETER;
