@@ -8,6 +8,11 @@
 
 #pragma once
 
+
+#if defined(GTEST_API_) && defined(_KERNEL_MODE)
+#undef _KERNEL_MODE
+#endif
+
  // <<<--- AÑADIR ESTAS LÍNEAS ---<<<
 #ifndef _CRYPTOSHIELD_SHARED_H_
 #define _CRYPTOSHIELD_SHARED_H_

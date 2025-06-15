@@ -533,7 +533,7 @@ namespace CryptoShield::Detection {
             return image_distribution_;
         default:
             // Return uniform distribution for unknown types
-            std::array<double, 256> uniform;
+            std::array<double, 256> uniform = {};
             std::fill(uniform.begin(), uniform.end(), 1.0 / 256.0);
             return uniform;
         }
