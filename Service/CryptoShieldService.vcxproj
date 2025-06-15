@@ -111,7 +111,7 @@
       <PreprocessorDefinitions>_CONSOLE;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>D:\CryptoShield\CryptoShieldCore;D:\CryptoShield\CryptoShieldCore\Detection;D:\CryptoShield\CryptoShieldCore\Utils;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\CryptoShield\Core;D:\CryptoShield\Core\Detection;D:\CryptoShield\Core\Utils;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -128,7 +128,7 @@
       <PreprocessorDefinitions>_CONSOLE;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>D:\CryptoShield\CryptoShieldCore;D:\CryptoShield\CryptoShieldCore\Detection;D:\CryptoShield\CryptoShieldCore\Utils;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\CryptoShield\Core;D:\CryptoShield\Core\Detection;D:\CryptoShield\Core\Utils;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -154,18 +154,18 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\CryptoShieldCore\CryptoShieldCore.vcxproj">
+    <ProjectReference Include="..\Core\CryptoShieldCore.vcxproj">
       <Project>{7bafc04c-ba23-4c7e-bb9f-0399a7fbbb82}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\..\Driver\CryptoShield\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets" Condition="Exists('..\..\Driver\CryptoShield\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets')" />
+    <Import Project="..\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets" Condition="Exists('..\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\..\Driver\CryptoShield\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\Driver\CryptoShield\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets'))" />
+    <Error Condition="!Exists('..\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\nlohmann.json.3.12.0\build\native\nlohmann.json.targets'))" />
   </Target>
 </Project>

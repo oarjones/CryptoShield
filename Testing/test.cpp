@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "../CryptoShieldCore/Utils/StringUtils.h"
+#include "..\Core\Utils\StringUtils.h"
 
 
 TEST(TestCaseName, TestName) {

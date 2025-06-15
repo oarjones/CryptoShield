@@ -13,10 +13,10 @@
 #include <thread>
 #include <atomic>
 #include <csignal>
-#include "..\..\CryptoShieldCore\CommunicationManager.h"
-#include "..\..\CryptoShieldCore\MessageProcessor.h"
-#include "..\..\CryptoShieldCore\Detection/DetectionConfig.h" // Added
-#include "..\..\CryptoShieldCore\Detection/TraditionalEngine.h" // Added
+#include "..\Core\CommunicationManager.h"
+#include "..\Core\MessageProcessor.h"
+#include "..\Core\Detection/DetectionConfig.h" // Added
+#include "..\Core\Detection/TraditionalEngine.h" // Added
 
  // Service name and display name
 constexpr wchar_t SERVICE_NAME[] = L"CryptoShieldService";
