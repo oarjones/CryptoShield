@@ -6,8 +6,13 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CryptoShield", "CryptoShield.vcxproj", "{FA2CBBCB-F458-4001-B131-9EF18655BCA0}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CryptoShieldService", "..\..\Service\CryptoShieldService\CryptoShieldService.vcxproj", "{F66C9981-459D-4A56-A8AB-B7744F35AF69}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82} = {7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}
+	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CryptoShield.Tests", "..\..\CryptoShield.Tests\CryptoShield.Tests.vcxproj", "{F982A374-04C8-4F34-9E75-907708A6C59B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Testing", "..\..\Testing\Testing.vcxproj", "{068C673C-2366-405A-8766-1C7EEB8D4873}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CryptoShieldCore", "..\..\CryptoShieldCore\CryptoShieldCore.vcxproj", "{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -37,14 +42,22 @@ Global
 		{F66C9981-459D-4A56-A8AB-B7744F35AF69}.Release|ARM64.Build.0 = Release|x64
 		{F66C9981-459D-4A56-A8AB-B7744F35AF69}.Release|x64.ActiveCfg = Release|x64
 		{F66C9981-459D-4A56-A8AB-B7744F35AF69}.Release|x64.Build.0 = Release|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Debug|ARM64.ActiveCfg = Debug|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Debug|ARM64.Build.0 = Debug|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Debug|x64.ActiveCfg = Debug|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Debug|x64.Build.0 = Debug|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Release|ARM64.ActiveCfg = Release|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Release|ARM64.Build.0 = Release|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Release|x64.ActiveCfg = Release|x64
-		{F982A374-04C8-4F34-9E75-907708A6C59B}.Release|x64.Build.0 = Release|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Debug|ARM64.ActiveCfg = Debug|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Debug|ARM64.Build.0 = Debug|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Debug|x64.ActiveCfg = Debug|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Debug|x64.Build.0 = Debug|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Release|ARM64.ActiveCfg = Release|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Release|ARM64.Build.0 = Release|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Release|x64.ActiveCfg = Release|x64
+		{068C673C-2366-405A-8766-1C7EEB8D4873}.Release|x64.Build.0 = Release|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Debug|ARM64.ActiveCfg = Debug|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Debug|ARM64.Build.0 = Debug|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Debug|x64.ActiveCfg = Debug|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Debug|x64.Build.0 = Debug|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|ARM64.ActiveCfg = Release|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|ARM64.Build.0 = Release|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|x64.ActiveCfg = Release|x64
+		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

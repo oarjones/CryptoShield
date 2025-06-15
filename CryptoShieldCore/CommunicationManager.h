@@ -1,5 +1,5 @@
 #pragma once
-#include "Shared.h"  
+#include "../Common/Shared.h"  
 /**
  * @file CommunicationManager.h
  * @brief Driver communication management interface
