@@ -306,7 +306,7 @@ namespace CryptoShield::Detection {
                 current_config_.global.log_directory.begin(),
                 current_config_.global.log_directory.end()
             );*/
-            j["global"]["log_directory"] = current_config_.global.log_directory;
+            j["global"]["log_directory"] = CryptoShield::Utils::to_string_utf8(current_config_.global.log_directory); // current_config_.global.log_directory;
             j["global"]["max_log_size_mb"] = current_config_.global.max_log_size_mb;
             j["global"]["log_retention_days"] = current_config_.global.log_retention_days;
             j["global"]["thread_pool_size"] = current_config_.global.thread_pool_size;
@@ -386,7 +386,7 @@ namespace CryptoShield::Detection {
                 current_config_.pattern_database.database_file.end()
             );*/
 
-            j["pattern_database"]["database_file"] = current_config_.pattern_database.database_file;
+            j["pattern_database"]["database_file"] = CryptoShield::Utils::to_string_utf8(current_config_.pattern_database.database_file); //current_config_.pattern_database.database_file;
 
             j["pattern_database"]["auto_update"] = current_config_.pattern_database.auto_update;
             j["pattern_database"]["update_interval_hours"] = current_config_.pattern_database.update_interval_hours;
