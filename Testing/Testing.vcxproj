@@ -105,8 +105,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Task2_Detection\SyntheticDataGenerator.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Task2_Detection\SyntheticDataGenerator.cpp" />
+    <ClCompile Include="Task2_Detection\task2_detection_test.cpp" />
     <ClCompile Include="test.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
