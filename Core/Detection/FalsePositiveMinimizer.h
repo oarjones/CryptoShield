@@ -11,7 +11,6 @@
 
 #include "TraditionalEngine.h"
 #include "DetectionConfig.h" // Added
-#include <windows.h>
 #include <string>
 #include <vector>
 #include <map>

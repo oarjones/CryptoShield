@@ -11,7 +11,6 @@
 
 #include "TraditionalEngine.h"
 #include "SystemActivityMonitor.h"
-#include <windows.h>
 #include <string>
 #include <vector>
 #include <map>

@@ -7,9 +7,12 @@
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>      // Incluir ANTES de otras cabeceras
+#include <fltuser.h>
+
 #pragma once
 
-#include <windows.h>
 #include <string>
 #include <vector>
 #include <map>

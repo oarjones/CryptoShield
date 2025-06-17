@@ -1,4 +1,4 @@
-#include "..\pch.h"
+#include "pch.h"
 #include <vector>
 #include <string>
 #include <numeric>
@@ -7,10 +7,10 @@
 #include <set>
 
 // Incluir las cabeceras de los componentes a probar
-#include "..\..\Core\Utils\StringUtils.h"
-#include "..\..\Core\Detection\EntropyAnalyzer.h"
-#include "..\..\Core\Detection\BehavioralDetector.h"
-#include "..\..\Core\Detection\DetectionConfig.h"
+#include "Utils\StringUtils.h"
+#include "Detection\EntropyAnalyzer.h"
+#include "Detection\BehavioralDetector.h"
+#include "Detection\DetectionConfig.h"
 
 #include "SyntheticDataGenerator.h"
 

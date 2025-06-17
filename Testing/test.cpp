@@ -2,6 +2,7 @@
 #include "..\Core\Utils\StringUtils.h"
 
 
+
 TEST(TestCaseName, TestName) {
   EXPECT_EQ(1, 1);
   EXPECT_TRUE(true);
@@ -32,3 +33,5 @@ TEST(StringUtilsTest, EmptyWStringToStringConversion) {
     // Assert
     ASSERT_EQ(expected_string, actual_string);
 }
+
+

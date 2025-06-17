@@ -7,11 +7,14 @@
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>      // Incluir ANTES de otras cabeceras
+#include <fltuser.h>
+
 #pragma once
 
 #include "../CommunicationManager.h"
 #include "DetectionConfig.h" // Added
-#include <windows.h>
 #include <vector>
 #include <queue>
 #include <set>

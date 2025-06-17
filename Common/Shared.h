@@ -9,23 +9,12 @@
 #pragma once
 
 
-#if defined(GTEST_API_) && defined(_KERNEL_MODE)
-#undef _KERNEL_MODE
+ // En C++, asegura que todas las declaraciones usen la convención de C para
+ // evitar problemas de name-mangling al enlazar con el driver.
+#ifdef __cplusplus
+extern "C" {
 #endif
 
- // <<<--- AÑADIR ESTAS LÍNEAS ---<<<
-#ifndef _CRYPTOSHIELD_SHARED_H_
-#define _CRYPTOSHIELD_SHARED_H_
-// --- FIN DE LÍNEAS A AÑADIR ---<<<
-
- // Ensure we can compile in both kernel and user mode
-#ifdef _KERNEL_MODE
-#include <ntddk.h> // Para tipos como ULONG, LARGE_INTEGER, etc.
-#define SHARED_API
-#else
-#include <windows.h> // Para tipos equivalentes en user-mode
-#define SHARED_API __declspec(dllexport) // O __declspec(dllimport) para el consumidor
-#endif
 
 // Version information (ejemplo, puede expandirse)
 #define CRYPTOSHIELD_VERSION_MAJOR  1
@@ -287,40 +276,8 @@ typedef struct _CS_USER_REPLY_PAYLOAD {
 
 #pragma pack(pop) // Restaura el empaquetado por defecto
 
-// Helper para calcular el tamaño total de un payload que tiene datos variables al final
-// Ejemplo de uso: totalSize = CS_CALCULATE_PAYLOAD_SIZE_WITH_VARIABLE_DATA(CS_ALERT_PAYLOAD, Description, totalDescBytes + totalFilePathBytes);
-// Donde 'Description' es el nombre del campo WCHAR[<max_len>] en la estructura base.
-// Este macro es más para payloads con un único campo de datos variables al final del tipo WCHAR Data[1].
-// Dadas las estructuras fijas de arriba, no es estrictamente necesario ahora.
-/*
-#define CS_CALCULATE_PAYLOAD_SIZE_WITH_VARIABLE_DATA(struct_type, last_fixed_field_name, variable_data_bytes) \
-    (FIELD_OFFSET(struct_type, last_fixed_field_name) + sizeof(((struct_type*)0)->last_fixed_field_name) + (variable_data_bytes))
-*/
-// Ejemplo más simple si WCHAR Data[1] es el último campo y representa el inicio de los datos variables:
-// #define CS_PAYLOAD_SIZE_VAR(base_struct_size, var_data_len_bytes) \
-//    ((base_struct_size) - sizeof(WCHAR) + (var_data_len_bytes))
 
 
-// Common macros (del código original Shared.h)
-#ifndef ARRAYSIZE
-#define ARRAYSIZE(a) (sizeof(a) / sizeof((a)[0]))
+#ifdef __cplusplus
+} // extern "C"
 #endif
-
-#ifdef _KERNEL_MODE
-    // En kernel, wcsnlen_s no está disponible directamente. Se puede usar RtlUpcaseUnicodeString etc.
-    // o bucles manuales seguros. Por ahora, esta macro se usará principalmente en user-mode.
-    // Podríamos tener una versión kernel si es necesario.
-#else
-#ifndef SAFE_STRING_LENGTH_CHARS // Longitud en caracteres, sin incluir NUL
-#define SAFE_STRING_LENGTH_CHARS(s, max_chars) \
-            ((s) ? wcsnlen_s((s), (max_chars)) : 0)
-#endif
-#endif
-
-
-// Version check macro (del código original Shared.h)
-#define CRYPTOSHIELD_VERSION_COMPATIBLE(major, minor) \
-    ((major) == CRYPTOSHIELD_VERSION_MAJOR && \
-     (minor) <= CRYPTOSHIELD_VERSION_MINOR)
-
-#endif // _CRYPTOSHIELD_SHARED_H_

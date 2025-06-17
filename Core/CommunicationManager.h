@@ -1,5 +1,12 @@
 #pragma once
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>      // Incluir ANTES de otras cabeceras
+#include <fltuser.h>
+
 #include "../Common/Shared.h"  
+
+
 /**
  * @file CommunicationManager.h
  * @brief Driver communication management interface
@@ -10,8 +17,6 @@
 
 #pragma once
 
-#include <windows.h>
-#include <fltuser.h>
 #include <string>
 #include <thread>
 #include <atomic>

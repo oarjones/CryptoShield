@@ -9,7 +9,6 @@
 
 #pragma once
 #include "DetectionConfig.h"
-#include <windows.h>
 #include <memory>
 #include <vector>
 #include <string>
