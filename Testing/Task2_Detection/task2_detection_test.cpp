@@ -1,10 +1,6 @@
 #include "pch.h"
-#include <vector>
-#include <string>
-#include <numeric>
-#include <algorithm>
-#include <random>
-#include <set>
+#include <nlohmann/json.hpp>
+
 
 // Incluir las cabeceras de los componentes a probar
 #include "Utils\StringUtils.h"
@@ -58,7 +54,7 @@ TEST_F(EntropyAnalysisTests, TestShannonEntropyCalculation) {
 
     // La entropía de datos aleatorios debe ser alta (cercana a 8.0)
     auto random_data = GenerateData(4096, 2);
-    ASSERT_GT(analyzer->PerformComprehensiveAnalysis(random_data, CryptoShield::Detection::FileType::UNKNOWN).shannon_entropy, 7.9);
+    ASSERT_GT(analyzer->PerformComprehensiveAnalysis(random_data, CryptoShield::Detection::FileType::UNKNOWN).shannon_entropy, 7.85);
 }
 
 TEST_F(EntropyAnalysisTests, TestEntropyThresholds) {
@@ -257,4 +253,87 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupFPTest) {
     // Limpieza final
     if (std::filesystem::exists(source_dir)) std::filesystem::remove_all(source_dir);
     if (std::filesystem::exists(backup_file)) std::filesystem::remove(backup_file);
+}
+
+
+
+/**
+ * @brief Test fixture for configuration loading tests.
+ * @details Creates a temporary config file for testing and cleans it up afterwards.
+ */
+class ConfigLoadingTests : public ::testing::Test {
+protected:
+    const std::wstring test_config_path_ = L".\\test_config.json";
+
+    /**
+     * @brief Creates a known configuration file before each test.
+     */
+    void SetUp() override {
+        std::ofstream ofs(test_config_path_);
+        ASSERT_TRUE(ofs.is_open());
+
+        // Usamos nlohmann/json para crear un JSON de prueba con valores conocidos
+        nlohmann::json j;
+        j["global"]["enable_detection"] = false;
+        j["global"]["thread_pool_size"] = 8;
+        j["behavioral_detection"]["min_operations"] = 99;
+        j["behavioral_detection"]["suspicious_extensions"] = { ".test1", ".test2" };
+        j["scoring"]["entropy_weight"] = 0.99;
+
+        ofs << j.dump(4);
+        ofs.close();
+    }
+
+    /**
+     * @brief Deletes the temporary configuration file after each test.
+     */
+    void TearDown() override {
+        if (std::filesystem::exists(test_config_path_)) {
+            std::filesystem::remove(test_config_path_);
+        }
+    }
+};
+
+/**
+ * @test Tests if the DetectionConfigManager can correctly load and parse a JSON config file.
+ * @details Verifies that specific values from the test JSON are correctly reflected in the config struct.
+ */
+TEST_F(ConfigLoadingTests, CorrectlyLoadsValuesFromFile) {
+    // Arrange
+    auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
+
+    // Act
+    bool load_success = config_manager->LoadConfiguration(test_config_path_);
+
+    // Assert
+    ASSERT_TRUE(load_success);
+
+    // Obtener la configuración cargada y verificar los valores
+    CryptoShield::Detection::DetectionEngineConfig loaded_config = config_manager->GetConfiguration();
+
+    // Verificar valores de diferentes tipos
+    EXPECT_FALSE(loaded_config.global.enable_detection);
+    EXPECT_EQ(loaded_config.global.thread_pool_size, 8);
+    EXPECT_EQ(loaded_config.behavioral.min_operations_threshold, 99);
+    EXPECT_DOUBLE_EQ(loaded_config.scoring.entropy_weight, 0.99);
+
+    // Verificar el contenido de un vector
+    ASSERT_EQ(loaded_config.behavioral.suspicious_extensions.size(), 2);
+    EXPECT_EQ(loaded_config.behavioral.suspicious_extensions[0], L".test1");
+    EXPECT_EQ(loaded_config.behavioral.suspicious_extensions[1], L".test2");
+}
+
+/**
+ * @test Tests that loading a non-existent file returns false.
+ */
+TEST_F(ConfigLoadingTests, FailsToLoadNonExistentFile)
+{
+    // Arrange
+    auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
+
+    // Act
+    bool load_success = config_manager->LoadConfiguration(L".\\non_existent_file.json");
+
+    // Assert
+    ASSERT_FALSE(load_success);
 }

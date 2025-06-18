@@ -1,12 +1,10 @@
 #pragma once
 
-// --- Encabezados Estándar ---
-// Definir WIN32_LEAN_AND_MEAN reduce el tamaño de las cabeceras de Windows
-// y previene conflictos con otras librerías.
+// --- Encabezados Estándar de Windows y C++ ---
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-// Incluye otras librerías estándar de C++ que usarás frecuentemente en tus tests.
+// Librerías estándar de C++ más comunes para tus tests
 #include <vector>
 #include <string>
 #include <memory>
@@ -16,7 +14,9 @@
 #include <algorithm>
 #include <random>
 #include <set>
-
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
 // --- Encabezado del Framework de Pruebas ---
 #include "gtest/gtest.h"
