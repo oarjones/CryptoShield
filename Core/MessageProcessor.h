@@ -20,6 +20,7 @@
 #include <vector>
 #include <fstream>
 #include <optional>
+#include "Detection/TraditionalEngine.h" 
 
 namespace CryptoShield {
 
@@ -36,6 +37,8 @@ namespace CryptoShield {
         ULONG suspicious_operations;
     };
 
+    
+
     /**
      * @brief File operation statistics
      */
@@ -46,6 +49,7 @@ namespace CryptoShield {
         ULONG deletes;
         ULONG renames;
         ULONG set_information;
+        ULONG suspicious_operations; // <-- MIEMBRO AÑADIDO
         std::chrono::steady_clock::time_point start_time;
         std::chrono::steady_clock::time_point last_operation;
     };
@@ -97,7 +101,8 @@ namespace CryptoShield {
         /**
          * @brief Constructor
          */
-        explicit MessageProcessor(const ProcessorConfig& config = {});
+        explicit MessageProcessor(const ProcessorConfig& config,
+            std::shared_ptr<Detection::TraditionalEngine> engine);
 
         /**
          * @brief Destructor
@@ -251,6 +256,9 @@ namespace CryptoShield {
     private:
         // Configuration
         ProcessorConfig config_;
+
+		// Detection engine
+        std::shared_ptr<Detection::TraditionalEngine> traditional_engine_;
 
         // Operation queue
         std::queue<FileOperationInfo> operation_queue_;

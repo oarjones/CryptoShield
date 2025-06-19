@@ -29,10 +29,12 @@ namespace CryptoShield {
 	/**
 	 * @brief Constructor
 	 */
-	MessageProcessor::MessageProcessor(const ProcessorConfig& config)
+	MessageProcessor::MessageProcessor(const ProcessorConfig& config,
+		std::shared_ptr<Detection::TraditionalEngine> engine)
 		: config_(config)
 		, running_(false)
-		, statistics_{ 0, 0, 0, 0, 0, 0 }
+		, statistics_{ 0, 0, 0, 0, 0, 0, 0 }
+		, traditional_engine_(engine) // <-- INICIALIZAR EL NUEVO MIEMBRO
 	{
 		// Set defaults if not provided
 		if (config_.log_directory.empty()) {
@@ -228,7 +230,7 @@ namespace CryptoShield {
 
 		{
 			std::lock_guard<std::mutex> lock(stats_mutex_);
-			statistics_ = { 0, 0, 0, 0, 0, 0 };
+			statistics_ = { 0, 0, 0, 0, 0, 0, 0 };
 			statistics_.start_time = std::chrono::steady_clock::now();
 		}
 
@@ -279,10 +281,15 @@ namespace CryptoShield {
 
 	/**
 	 * @brief Process single operation
+	 * @details This is the core analysis function for each file operation received.
+	 * It updates statistics, invokes the detection engine, and generates
+	 * alerts for detected threats. It is executed by one of the processing threads.
+	 *
+	 * @param operation The file operation information received from the driver.
 	 */
 	void MessageProcessor::ProcessOperation(const FileOperationInfo& operation)
 	{
-		// Update statistics
+		// 1. Update general statistics based on the type of operation received.
 		{
 			std::lock_guard<std::mutex> lock(stats_mutex_);
 			statistics_.total_operations++;
@@ -307,45 +314,70 @@ namespace CryptoShield {
 			}
 		}
 
-		// Update process information
+		// 2. Update information and history for the process that performed the operation.
 		UpdateProcessInfo(operation);
 
-		// Analyze operation
-		ULONG suspicion_level = AnalyzeOperation(operation);
+		// 3. Prepare the data structure required by the detection engine.
+		Detection::FileOperation engine_operation;
+		engine_operation.process_id = operation.process_id;
+		engine_operation.thread_id = operation.thread_id;
+		engine_operation.file_path = operation.file_path;
+		engine_operation.operation_type = static_cast<ULONG>(operation.type);
+		// Note: The engine is responsible for its own timing and advanced feature extraction.
 
-		// Log operation if enabled
+		// 4. Invoke the detection engine to analyze the operation.
+		// The traditional_engine_ member must be provided during MessageProcessor's construction.
+		if (!traditional_engine_) {
+			std::wcerr << L"[MessageProcessor] ERROR: Detection engine is not initialized!" << std::endl;
+			return;
+		}
+		Detection::DetectionResult result = traditional_engine_->AnalyzeOperation(engine_operation);
+
+		// 5. Process the detection result.
+		if (result.is_threat) {
+			// Increment the suspicious operations counter.
+			{
+				std::lock_guard<std::mutex> lock(stats_mutex_);
+				statistics_.suspicious_operations++;
+			}
+
+			// Map the engine's detailed threat level to the service's alert severity.
+			AlertSeverity severity = AlertSeverity::Low;
+			switch (result.threat_level) {
+			case Detection::ThreatLevel::CRITICAL:
+				severity = AlertSeverity::Critical;
+				break;
+			case Detection::ThreatLevel::HIGH:
+				severity = AlertSeverity::High;
+				break;
+			case Detection::ThreatLevel::MEDIUM:
+				severity = AlertSeverity::Medium;
+				break;
+			case Detection::ThreatLevel::LOW:
+			default:
+				severity = AlertSeverity::Low;
+				break;
+			}
+
+			// Build a detailed and informative description for the alert.
+			std::wstringstream desc;
+			desc << L"Threat Detected! Level: " << static_cast<int>(result.threat_level)
+				<< L", Score: " << std::fixed << std::setprecision(2) << result.confidence_score
+				<< L", Family: " << (result.primary_threat_name.empty() ? L"Unknown" : result.primary_threat_name)
+				<< L". Recommended Action: " << result.recommended_action;
+
+			// Dispatch the alert if alerting is enabled.
+			if (config_.enable_alerts) {
+				GenerateAlert(severity, desc.str(), operation);
+			}
+		}
+
+		// 6. Log the original operation if logging is enabled.
 		if (config_.enable_logging) {
 			LogOperation(operation);
 		}
-
-		// Check for alerts
-		if (config_.enable_alerts && suspicion_level >= config_.alert_threshold) {
-			AlertSeverity severity = AlertSeverity::Low;
-			if (suspicion_level >= 80) {
-				severity = AlertSeverity::Critical;
-			}
-			else if (suspicion_level >= 60) {
-				severity = AlertSeverity::High;
-			}
-			else if (suspicion_level >= 40) {
-				severity = AlertSeverity::Medium;
-			}
-
-			std::wstring description = L"Suspicious activity detected: " +
-				operation.GetOperationTypeString() +
-				L" on " + operation.file_path;
-
-			GenerateAlert(severity, description, operation);
-		}
-
-		// Check for suspicious patterns
-		if (CheckSuspiciousPatterns(operation.process_id)) {
-			GenerateAlert(AlertSeverity::High,
-				L"Suspicious pattern detected for process " +
-				std::to_wstring(operation.process_id),
-				operation);
-		}
 	}
+
 
 	/**
 	 * @brief Update process information

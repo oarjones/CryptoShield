@@ -13,6 +13,7 @@
 #include <thread>
 #include <atomic>
 #include <csignal>
+#include <sstream>
 #include "..\Core\CommunicationManager.h"
 #include "..\Core\MessageProcessor.h"
 #include "..\Core\Detection/DetectionConfig.h" // Added
@@ -262,189 +263,162 @@ VOID WINAPI ServiceCtrlHandler(DWORD ctrl_code)
 
 /**
  * @brief Service worker thread
- * @details Main service logic runs here
+ * @details Main service logic runs here. This thread initializes and orchestrates all
+ * core components, including configuration loading, communication with the driver,
+ * the detection engine, and the message processor. It then enters a monitoring
+
+ * loop until a stop signal is received, after which it handles graceful shutdown.
  *
- * @param lpParam Thread parameter (unused)
- * @return Thread exit code
+ * @param lpParam Thread parameter (unused).
+ * @return Thread exit code.
  */
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 {
     UNREFERENCED_PARAMETER(lpParam);
-
     g_running = true;
 
-    // Create communication manager
-    auto communication_manager = std::make_unique<CryptoShield::CommunicationManager>();
+    // --- 1. COMPONENT INITIALIZATION ---
 
-    // Create message processor with configuration
-    CryptoShield::ProcessorConfig processor_config;
-    processor_config.enable_logging = true;
-    processor_config.log_directory = L"C:\\ProgramData\\CryptoShield\\Logs";
-    processor_config.max_queue_size = 10000;
-    processor_config.processing_threads = 4;
-    processor_config.enable_alerts = true;
-    processor_config.alert_threshold = 40;
-
-    auto message_processor = std::make_unique<CryptoShield::MessageProcessor>(processor_config);
-
-    // >>> ADD NEW CONFIGURATION LOADING LOGIC <<<
+    // Load configuration from "detection_config.json"
     auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
-    bool config_loaded = config_manager->LoadConfiguration(L"detection_config.json"); // Or get path from a central place
-
-    if (!config_loaded) {
+    if (!config_manager->LoadConfiguration(L"detection_config.json")) {
         WriteEventLog(EVENTLOG_WARNING_TYPE, L"Failed to load detection_config.json. Using default detection settings.");
-        // The config_manager will use default settings if loading fails and GetConfiguration() is called.
-    } else {
+    }
+    else {
         WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Successfully loaded detection_config.json.");
     }
-
     CryptoShield::Detection::DetectionEngineConfig engine_config = config_manager->GetConfiguration();
 
-    // >>> UPDATE TraditionalEngine INSTANTIATION <<<
-    auto traditional_engine = std::make_unique<CryptoShield::Detection::TraditionalEngine>(engine_config); // NEW
-
-    // Ensure traditional_engine is initialized
+    // Create the Traditional Detection Engine using the loaded configuration
+    auto traditional_engine = std::make_shared<CryptoShield::Detection::TraditionalEngine>(engine_config);
     if (!traditional_engine->Initialize()) {
-        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to initialize TraditionalEngine.");
-        // Handle error, perhaps by stopping the service or degrading functionality.
-    } else {
-        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"TraditionalEngine initialized successfully.");
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to initialize TraditionalEngine. Service cannot start.");
+        return ERROR_SERVICE_SPECIFIC_ERROR;
     }
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"TraditionalEngine initialized successfully.");
 
-    // Set up callbacks
+    // Create the Communication Manager to handle I/O with the driver
+    auto communication_manager = std::make_unique<CryptoShield::CommunicationManager>();
+
+    // Configure and create the Message Processor, injecting the detection engine
+    CryptoShield::ProcessorConfig processor_config;
+    processor_config.enable_logging = engine_config.global.enable_logging;
+    processor_config.log_directory = engine_config.global.log_directory;
+    processor_config.max_queue_size = 10000;
+    processor_config.processing_threads = static_cast<ULONG>(engine_config.global.thread_pool_size);
+    processor_config.enable_alerts = engine_config.response.enable_alerts;
+    processor_config.alert_threshold = 0; // Deprecated, engine handles thresholds now
+
+    auto message_processor = std::make_unique<CryptoShield::MessageProcessor>(processor_config, traditional_engine);
+
+    // --- 2. COMPONENT WIRING AND STARTUP ---
+
+    // Set the callback for when the Communication Manager receives an operation from the driver
     communication_manager->SetMessageCallback(
         [&message_processor](const CryptoShield::FileOperationInfo& operation) {
             message_processor->EnqueueOperation(operation);
         }
     );
 
+    // Set the callback for when a threat is detected and an alert is generated
+    message_processor->SetAlertCallback(
+        [](const CryptoShield::AlertInfo& alert) {
+            std::wstringstream severity_str;
+            switch (alert.severity) {
+            case CryptoShield::AlertSeverity::Critical:
+                severity_str << L"CRITICAL";
+                break;
+            case CryptoShield::AlertSeverity::High:
+                severity_str << L"HIGH";
+                break;
+            case CryptoShield::AlertSeverity::Medium:
+                severity_str << L"MEDIUM";
+                break;
+            case CryptoShield::AlertSeverity::Low:
+                severity_str << L"LOW";
+                break;
+            default: 
+                severity_str << L"UNKNOWN";
+                break;
+            }
+
+            // La construcción del mensaje ahora es segura
+            std::wstring alert_message = L"[" + severity_str.str() + L"] " + alert.description;
+            WriteEventLog(EVENTLOG_WARNING_TYPE, alert_message);
+        }
+    );
+
+    // Set callback for connection status changes
     communication_manager->SetConnectionCallback(
         [](bool connected) {
             if (connected) {
-                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Connected to driver");
+                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Connected to driver.");
             }
             else {
-                WriteEventLog(EVENTLOG_WARNING_TYPE, L"Disconnected from driver");
+                WriteEventLog(EVENTLOG_WARNING_TYPE, L"Disconnected from driver.");
             }
         }
     );
 
-    message_processor->SetAlertCallback(
-        [](const CryptoShield::AlertInfo& alert) {
-            std::wstring severity_str;
-            switch (alert.severity) {
-            case CryptoShield::AlertSeverity::Critical:
-                severity_str = L"CRITICAL";
-                break;
-            case CryptoShield::AlertSeverity::High:
-                severity_str = L"HIGH";
-                break;
-            case CryptoShield::AlertSeverity::Medium:
-                severity_str = L"MEDIUM";
-                break;
-            case CryptoShield::AlertSeverity::Low:
-                severity_str = L"LOW";
-                break;
-            }
-
-            std::wstring alert_message = L"[" + severity_str + L"] " + alert.description;
-            WriteEventLog(EVENTLOG_WARNING_TYPE, alert_message);
-
-            // In production, could also send email, SMS, or trigger other responses
-        }
-    );
-
-    // Initialize communication with driver
+    // Initialize communication with the driver
     if (!communication_manager->Initialize()) {
-        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to connect to driver");
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to connect to driver. Service will stop.");
         return ERROR_SERVICE_SPECIFIC_ERROR;
     }
 
-    // Start message processing
+    // Start the message processing background threads
     if (!message_processor->Start()) {
-        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to start message processor");
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to start message processor. Service will stop.");
         communication_manager->Shutdown();
         return ERROR_SERVICE_SPECIFIC_ERROR;
     }
 
-    // Enable monitoring in driver
-    // Default actions: Allow and Log. Adjust as necessary.
+    // Send initial configuration to the driver
     ULONG initial_config_flags = CONFIG_FLAG_MONITORING_ENABLED;
-    ULONG initial_sensitivity = 50;
-    ULONG initial_response_actions = ACTION_ALLOW | ACTION_LOG_ONLY; // Example default actions
-    
-    //TODO: Descomentar
+    ULONG initial_sensitivity = 50; // Example value
+    ULONG initial_response_actions = ACTION_ALLOW | ACTION_LOG_ONLY; // Example value
     communication_manager->UpdateConfiguration(initial_config_flags, initial_sensitivity, initial_response_actions);
 
-    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread started");
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service is now fully operational and monitoring.");
 
-    // Main service loop
+    // --- 3. MAIN SERVICE LOOP ---
+
     ULONGLONG last_stats_time = GetTickCount64();
     while (g_running) {
         if (!g_paused) {
-            // Check connection status
+            // Check driver connection status and attempt to reconnect if lost
             if (!communication_manager->IsConnected()) {
                 WriteEventLog(EVENTLOG_WARNING_TYPE, L"Lost connection to driver, attempting reconnect...");
-
-                // Try to reconnect
                 communication_manager->Shutdown();
-                Sleep(5000); // Wait 5 seconds
-
+                Sleep(5000); // Wait before retrying
                 if (!communication_manager->Initialize()) {
-                    WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to reconnect to driver");
+                    WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to reconnect to driver. Will retry.");
                     Sleep(10000); // Wait longer before next attempt
                 }
             }
 
-            // Log statistics every minute
-            ULONGLONG current_time = GetTickCount64();
-            if (current_time - last_stats_time > 60000) {
+            // Log statistics periodically (e.g., every minute)
+            if (GetTickCount64() - last_stats_time > 60000) {
                 auto stats = message_processor->GetStatistics();
-                std::wstring stats_msg = L"Statistics - Total operations: " +
-                    std::to_wstring(stats.total_operations) +
-                    L", Queue size: " +
-                    std::to_wstring(message_processor->GetQueueSize());
+                std::wstring stats_msg = L"Statistics - Total Ops: " + std::to_wstring(stats.total_operations) +
+                    L", Suspicious: " + std::to_wstring(stats.suspicious_operations) +
+                    L", Queue Size: " + std::to_wstring(message_processor->GetQueueSize());
                 WriteEventLog(EVENTLOG_INFORMATION_TYPE, stats_msg);
-
-                // Request driver status
-                CS_STATUS_REPLY_PAYLOAD driver_status = {}; // Use shared structure
-                // The RequestStatus signature is bool RequestStatus(CS_STATUS_REPLY_PAYLOAD& status_reply_data)
-                // The call communication_manager->RequestStatus(driver_status) is correct.
-                // However, RequestStatus in CommunicationManager.cpp needs to be updated
-                // to call the new SendMessage signature correctly. Assuming that fix for now.
-                if (communication_manager->RequestStatus(driver_status)) {
-                    std::wstring driver_msg = L"Driver status - Monitoring: " +
-                        std::wstring((driver_status.CurrentConfigFlags & CONFIG_FLAG_MONITORING_ENABLED) ? L"Enabled" : L"Disabled") +
-                        L", Sensitivity: " + std::to_wstring(driver_status.CurrentDetectionSensitivity) +
-                        L", Driver total operations monitored: " + std::to_wstring(driver_status.TotalOperationsMonitored) +
-                        L", Kernel messages sent: " + std::to_wstring(driver_status.KernelMessagesSent) +
-                        L", Kernel messages received: " + std::to_wstring(driver_status.KernelMessagesReceived);
-                    WriteEventLog(EVENTLOG_INFORMATION_TYPE, driver_msg);
-                } else {
-                    WriteEventLog(EVENTLOG_WARNING_TYPE, L"Failed to retrieve driver status.");
-                }
-
-                last_stats_time = current_time;
+                last_stats_time = GetTickCount64();
             }
         }
-
-        // Sleep to prevent CPU spinning
-        Sleep(100);
+        Sleep(100); // Prevent CPU spinning
     }
 
-    // Cleanup
-    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread stopping");
+    // --- 4. GRACEFUL SHUTDOWN ---
 
-    // Stop message processing
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread stopping...");
+
     message_processor->Stop();
-
-    // Send shutdown request to driver
     communication_manager->RequestShutdown();
-
-    // Disconnect from driver
     communication_manager->Shutdown();
+    traditional_engine->Shutdown();
 
-    // Log final statistics
     auto final_stats = message_processor->GetStatistics();
     std::wstring final_msg = L"Final statistics - Total operations processed: " +
         std::to_wstring(final_stats.total_operations);
@@ -452,6 +426,8 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
     return ERROR_SUCCESS;
 }
+
+
 
 /**
  * @brief Sets service status
