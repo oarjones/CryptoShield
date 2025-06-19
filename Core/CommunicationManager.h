@@ -213,6 +213,7 @@ namespace CryptoShield {
         ULONG thread_id;
         //WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
         std::wstring file_path;
+        std::wstring new_file_path; // <-- AÑADE ESTE CAMPO
         FILETIME timestamp;
 
         /**

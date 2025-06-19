@@ -58,10 +58,10 @@ namespace CryptoShield::Detection {
                 current_config_.global.enable_logging = g.value("enable_logging", true);
                 current_config_.global.enable_telemetry = g.value("enable_telemetry", false);
                 current_config_.global.debug_mode = g.value("debug_mode", false);
-                current_config_.global.log_directory = std::wstring(
-                    g.value("log_directory", "C:\\ProgramData\\CryptoShield\\Logs").begin(),
-                    g.value("log_directory", "C:\\ProgramData\\CryptoShield\\Logs").end()
-                );
+
+                std::string log_file = g.value("log_directory", "C:\\ProgramData\\CryptoShield\\Logs");
+                current_config_.global.log_directory = std::wstring(log_file.begin(), log_file.end());
+
                 current_config_.global.max_log_size_mb = g.value("max_log_size_mb", 100);
                 current_config_.global.log_retention_days = g.value("log_retention_days", 30);
                 current_config_.global.thread_pool_size = g.value("thread_pool_size", 4);
@@ -112,10 +112,12 @@ namespace CryptoShield::Detection {
                     }
                 }
                 if (b.contains("suspicious_patterns_regex") && b["suspicious_patterns_regex"].is_array()) {
-                    current_config_.behavioral.suspicious_patterns_regex.clear();
                     for (const auto& pat : b["suspicious_patterns_regex"]) {
+                        // Obtenemos la cadena UNA SOLA VEZ y la guardamos
+                        const std::string s = pat.get<std::string>();
+                        // Ahora construimos el wstring usando iteradores del MISMO objeto
                         current_config_.behavioral.suspicious_patterns_regex.push_back(
-                            std::wstring(pat.get<std::string>().begin(), pat.get<std::string>().end())
+                            std::wstring(s.begin(), s.end())
                         );
                     }
                 }
@@ -185,40 +187,47 @@ namespace CryptoShield::Detection {
                 if (fp.contains("trusted_publishers") && fp["trusted_publishers"].is_array()) {
                     current_config_.false_positive.trusted_publishers.clear();
                     for (const auto& pub : fp["trusted_publishers"]) {
+                        const std::string s = pub.get<std::string>();
                         current_config_.false_positive.trusted_publishers.push_back(
-                            std::wstring(pub.get<std::string>().begin(), pub.get<std::string>().end())
+                            std::wstring(s.begin(), s.end())
                         );
                     }
                 }
+
                 if (fp.contains("trusted_backup_software") && fp["trusted_backup_software"].is_array()) {
                     current_config_.false_positive.trusted_backup_software.clear();
                     for (const auto& proc : fp["trusted_backup_software"]) {
+                        const std::string s = proc.get<std::string>();
                         current_config_.false_positive.trusted_backup_software.push_back(
-                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                            std::wstring(s.begin(), s.end())
                         );
                     }
                 }
+
                 if (fp.contains("trusted_compression_software") && fp["trusted_compression_software"].is_array()) {
                     current_config_.false_positive.trusted_compression_software.clear();
                     for (const auto& proc : fp["trusted_compression_software"]) {
+                        const std::string s = proc.get<std::string>();
                         current_config_.false_positive.trusted_compression_software.push_back(
-                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                            std::wstring(s.begin(), s.end())
                         );
                     }
                 }
                 if (fp.contains("trusted_dev_software") && fp["trusted_dev_software"].is_array()) {
                     current_config_.false_positive.trusted_dev_software.clear();
                     for (const auto& proc : fp["trusted_dev_software"]) {
+                        const std::string s = proc.get<std::string>();
                         current_config_.false_positive.trusted_dev_software.push_back(
-                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                            std::wstring(s.begin(), s.end())
                         );
                     }
                 }
                 if (fp.contains("trusted_system_software") && fp["trusted_system_software"].is_array()) {
                     current_config_.false_positive.trusted_system_software.clear();
                     for (const auto& proc : fp["trusted_system_software"]) {
+                        const std::string s = proc.get<std::string>();
                         current_config_.false_positive.trusted_system_software.push_back(
-                            std::wstring(proc.get<std::string>().begin(), proc.get<std::string>().end())
+                            std::wstring(s.begin(), s.end())
                         );
                     }
                 }

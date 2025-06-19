@@ -297,6 +297,9 @@ namespace CryptoShield::Detection {
 
         // Add config member
         DetectionEngineConfig::BehavioralConfig config_;
+
+        // Nuevo: Cola para rastrear las marcas de tiempo de los últimos renombrados
+        std::deque<std::chrono::steady_clock::time_point> rename_timestamps_;
     };
 
     /**
@@ -452,13 +455,7 @@ namespace CryptoShield::Detection {
          */
         void UpdateProcessProfile(const FileOperationInfo& operation);
 
-        /**
-         * @brief Calculate combined suspicion score
-         * @param profile Process profile
-         * @return Combined score (0-1)
-         */
-        double CalculateCombinedScore(const ProcessBehaviorProfile& profile) const;
-
+        
         /**
          * @brief Detect temporal anomalies
          * @param operations Recent operations
@@ -472,6 +469,13 @@ namespace CryptoShield::Detection {
          * @return Vector of detected patterns
          */
         std::vector<std::wstring> CheckKnownPatterns(const ProcessBehaviorProfile& profile) const;
+
+        /**
+         * @brief Calculates a suspicion score based on a process's historical profile.
+         * @param profile The complete behavior profile of the process.
+         * @return A suspicion score between 0.0 and 1.0.
+         */
+        double CalculateCombinedScore(const ProcessBehaviorProfile& profile) const;
 
     private:
         // Detection components

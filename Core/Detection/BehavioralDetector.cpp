@@ -263,11 +263,8 @@ namespace CryptoShield::Detection {
 	}
 
 	/**
-	 * @brief Analyzes a file rename operation for suspicious characteristics.
-	 * @details Checks for known bad extensions and suspicious regex patterns on the full filename.
-	 * @param old_path The original file path.
-	 * @param new_path The new file path after renaming.
-	 * @param process_id The ID of the process performing the operation.
+	 * @brief Analyzes a file rename operation, now including time-based frequency.
+	 * @details Checks for bad extensions, suspicious patterns, and a high rate of renames.
 	 * @return An ExtensionChangeEvent struct with the analysis result.
 	 */
 	ExtensionChangeEvent FileExtensionMonitor::AnalyzeFileRename(
@@ -286,27 +283,42 @@ namespace CryptoShield::Detection {
 		event.original_extension = old_p.has_extension() ? old_p.extension().wstring() : L"";
 		event.new_extension = new_p.has_extension() ? new_p.extension().wstring() : L"";
 
-		// --- INICIO DE LA CORRECCIÓN ---
-		// El score se calcula primero en base a la extensión, y luego se
-		// comprueba el nombre completo del fichero contra los patrones de regex.
-
+		// 1. Puntuación basada en la extensión y el nombre de archivo (lógica que ya teníamos)
 		event.suspicion_score = CalculateExtensionSuspicion(event.new_extension);
-
-		// Comprobación adicional del nombre completo con regex.
-		// Esto corrige el bug donde solo se comprobaba la extensión final (ej: ".com").
 		if (MatchesSuspiciousPattern(new_p.filename().wstring())) {
-			// Si coincide con un patrón regex, elevamos el score significativamente.
 			event.suspicion_score = std::max(event.suspicion_score, 0.9);
 		}
-		// --- FIN DE LA CORRECCIÓN ---
+
+		// 2. Nuevo: Análisis de frecuencia de renombrado
+		{
+			std::lock_guard<std::mutex> lock(changes_mutex_); // Usamos el mutex existente
+			auto& timestamps = rename_timestamps_;
+			auto now = std::chrono::steady_clock::now();
+
+			// Añadir la marca de tiempo actual
+			timestamps.push_back(now);
+
+			// Eliminar las marcas de tiempo que estén fuera de la ventana de 60 segundos
+			auto time_window = std::chrono::seconds(config_.time_window_seconds);
+			while (!timestamps.empty() && (now - timestamps.front() > time_window)) {
+				timestamps.pop_front();
+			}
+
+			// Si hay muchos renombrados recientes, aumenta la puntuación
+			const size_t RENAME_BURST_THRESHOLD = 15; // Umbral de ejemplo: 15 renombres en 60s
+			if (timestamps.size() > RENAME_BURST_THRESHOLD) {
+				double frequency_score = 0.5 * std::min(static_cast<double>(timestamps.size()) / (RENAME_BURST_THRESHOLD * 2), 1.0);
+				event.suspicion_score = std::max(event.suspicion_score, frequency_score);
+			}
+		}
 
 		event.is_suspicious = event.suspicion_score > 0.5;
 
+		// ... (el resto de la función para almacenar el historial no cambia) ...
 		{
 			std::lock_guard<std::mutex> lock(extensions_mutex_);
 			original_extensions_[new_path] = event.original_extension;
 		}
-
 		{
 			std::lock_guard<std::mutex> lock(changes_mutex_);
 			extension_changes_.push_back(event);
@@ -317,6 +329,8 @@ namespace CryptoShield::Detection {
 
 		return event;
 	}
+
+
 
 	/**
 	 * @brief Calculate extension suspicion score
@@ -615,6 +629,7 @@ namespace CryptoShield::Detection {
 		return common;
 	}
 
+
 	/**
 	 * @brief Constructor
 	 */
@@ -634,47 +649,90 @@ namespace CryptoShield::Detection {
 	 */
 	BehavioralDetector::~BehavioralDetector() = default;
 
+
+
 	/**
-	 * @brief Analyze single file operation
+	 * @brief Calculates a suspicion score based on the entire historical profile of a process.
+	 * @details This function evaluates long-term indicators like total operations, directory/extension
+	 * spread, and the ratio of potentially malicious operations (writes/renames).
+	 * @param profile The process profile to analyze.
+	 * @return A suspicion score between 0.0 and 1.0.
+	 */
+	double BehavioralDetector::CalculateCombinedScore(const ProcessBehaviorProfile& profile) const
+	{
+		double score = 0.0;
+
+		// Puntuación basada en el volumen total de operaciones (indicador de actividad masiva)
+		if (profile.total_operations > 50) {
+			score += 0.3 * std::min(profile.total_operations / 500.0, 1.0);
+		}
+
+		// Puntuación basada en la variedad de extensiones afectadas
+		if (profile.affected_extensions.size() > 5) {
+			score += 0.2 * std::min(profile.affected_extensions.size() / 20.0, 1.0);
+		}
+
+		// Puntuación basada en la dispersión de directorios
+		if (profile.affected_directories.size() > 3) {
+			score += 0.2 * std::min(profile.affected_directories.size() / 15.0, 1.0);
+		}
+
+		// Puntuación basada en la proporción de operaciones "peligrosas" (escrituras y renombrados)
+		if (profile.total_operations > 0) {
+			double write_ratio = static_cast<double>(profile.write_operations) / profile.total_operations;
+			double rename_ratio = static_cast<double>(profile.rename_operations) / profile.total_operations;
+
+			if (write_ratio > 0.5 || rename_ratio > 0.3) {
+				score += 0.3 * std::max(write_ratio, rename_ratio);
+			}
+		}
+
+		return std::min(score, 1.0);
+	}
+
+
+
+	/**
+	 * @brief Analyzes a single file operation by orchestrating all behavioral sub-detectors.
+	 * @details Combines evidence from short-term window analysis, specific rename analysis,
+	 * and long-term historical process profiling to make a final decision.
+	 * @param operation The file operation to analyze.
+	 * @return A comprehensive behavioral analysis result.
 	 */
 	BehavioralAnalysisResult BehavioralDetector::AnalyzeOperation(
 		const FileOperationInfo& operation)
 	{
 		total_operations_analyzed_++;
-
-		// Update process profile
 		UpdateProcessProfile(operation);
 
-		// Mass modification detection
-		auto mass_result = mass_modification_detector_->AnalyzeOperation(operation);
+		// 1. Analizar la actividad en la ventana de tiempo actual (ráfagas)
+		BehavioralAnalysisResult result = mass_modification_detector_->AnalyzeOperation(operation);
+		double final_score = result.confidence_score;
 
-		// Directory traversal detection
-		traversal_detector_->AnalyzeOperation(operation, operation.process_id);
-
-		// Extension monitoring for rename operations
+		// 2. Analizar la operación de renombrado (si aplica)
 		if (operation.type == FileOperationType::Rename) {
-			// Note: Need old path from somewhere - this is simplified
-			extension_monitor_->AnalyzeFileRename(
+			auto rename_event = extension_monitor_->AnalyzeFileRename(
 				operation.file_path,
-				operation.file_path + std::wstring(L".encrypted"),
+				operation.new_file_path,
 				operation.process_id
 			);
+			if (rename_event.is_suspicious) {
+				final_score = std::max(final_score, rename_event.suspicion_score);
+				result.suspicious_patterns.push_back(L"Suspicious Rename Activity");
+			}
 		}
 
-		// Get process profile
-		ProcessBehaviorProfile profile;
+		// 3. Analizar el perfil histórico completo del proceso
 		{
 			std::lock_guard<std::mutex> lock(profiles_mutex_);
-			profile = process_profiles_[operation.process_id];
+			const auto& profile = process_profiles_[operation.process_id];
+			double historical_score = CalculateCombinedScore(profile);
+			final_score = std::max(final_score, historical_score);
 		}
 
-		// Calculate combined score
-		double combined_score = CalculateCombinedScore(profile);
-
-		// Build result
-		BehavioralAnalysisResult result = mass_result;
-		result.confidence_score = combined_score;
-		result.is_suspicious = combined_score > 0.6;
+		// 4. Actualizar el resultado con la puntuación final combinada
+		result.confidence_score = final_score;
+		result.is_suspicious = result.confidence_score >= config_.suspicion_score_threshold;
 
 		if (result.is_suspicious) {
 			suspicious_patterns_detected_++;
@@ -682,6 +740,8 @@ namespace CryptoShield::Detection {
 
 		return result;
 	}
+
+
 
 	/**
 	 * @brief Analyze batch of operations
@@ -809,7 +869,8 @@ namespace CryptoShield::Detection {
 	}
 
 	/**
-	 * @brief Update process profile
+	 * @brief Updates the historical behavior profile for a given process.
+	 * @details This function ONLY accumulates statistics. It no longer calculates scores.
 	 */
 	void BehavioralDetector::UpdateProcessProfile(const FileOperationInfo& operation)
 	{
@@ -820,87 +881,29 @@ namespace CryptoShield::Detection {
 		if (profile.process_id == 0) {
 			profile.process_id = operation.process_id;
 			profile.first_seen = std::chrono::steady_clock::now();
-
-			// Get process name (simplified)
-			profile.process_name = L"Unknown";
+			profile.process_name = L"Unknown"; // Se podría obtener el nombre real aquí
 		}
 
 		profile.last_seen = std::chrono::steady_clock::now();
 		profile.total_operations++;
 
-		// Update operation counts
 		switch (operation.type) {
-		case FileOperationType::Write:
-			profile.write_operations++;
-			break;
-		case FileOperationType::Delete:
-			profile.delete_operations++;
-			break;
-		case FileOperationType::Rename:
-			profile.rename_operations++;
-			break;
+		case FileOperationType::Write: profile.write_operations++; break;
+		case FileOperationType::Delete: profile.delete_operations++; break;
+		case FileOperationType::Rename: profile.rename_operations++; break;
+		default: break;
 		}
 
-		// Extract directory and extension
-		//size_t last_slash = operation.file_path.find_last_of(L"\\");
-		size_t last_slash = operation.file_path.find_last_of(L"\\");
-
-
-		if (last_slash != std::wstring::npos) {
-			profile.affected_directories.insert(operation.file_path.substr(0, last_slash));
+		std::filesystem::path p(operation.file_path);
+		if (p.has_parent_path()) {
+			profile.affected_directories.insert(p.parent_path().wstring());
 		}
-
-		//size_t last_dot = operation.file_path.find_last_of(L".");
-		size_t last_dot = operation.file_path.find_last_of(L".");
-		if (last_dot != std::wstring::npos) {
-			//std::wstring extension = operation.file_path.substr(last_dot);
-			std::wstring extension = operation.file_path.substr(last_dot);
-
-			profile.affected_extensions.insert(extension);
-
-			if (operation.type == FileOperationType::Create) {
-				profile.created_extensions.insert(extension);
-			}
+		if (p.has_extension()) {
+			profile.affected_extensions.insert(p.extension().wstring());
 		}
-
-		// Update behavioral scores
-		profile.overall_suspicion_score = CalculateCombinedScore(profile);
+		// NOTA: Se ha eliminado la llamada a CalculateCombinedScore de aquí.
 	}
 
-	/**
-	 * @brief Calculate combined suspicion score
-	 */
-	double BehavioralDetector::CalculateCombinedScore(const ProcessBehaviorProfile& profile) const
-	{
-		double score = 0.0;
-
-		// Mass modification score (0-0.3)
-		if (profile.total_operations > 50) {
-			score += 0.3 * std::min(profile.total_operations / 500.0, 1.0);
-		}
-
-		// Extension variety score (0-0.2)
-		if (profile.affected_extensions.size() > 5) {
-			score += 0.2 * std::min(profile.affected_extensions.size() / 20.0, 1.0);
-		}
-
-		// Directory spread score (0-0.2)
-		if (profile.affected_directories.size() > 3) {
-			score += 0.2 * std::min(profile.affected_directories.size() / 15.0, 1.0);
-		}
-
-		// Operation type distribution (0-0.3)
-		double write_ratio = profile.total_operations > 0 ?
-			static_cast<double>(profile.write_operations) / profile.total_operations : 0.0;
-		double rename_ratio = profile.total_operations > 0 ?
-			static_cast<double>(profile.rename_operations) / profile.total_operations : 0.0;
-
-		if (write_ratio > 0.5 || rename_ratio > 0.3) {
-			score += 0.3 * std::max(write_ratio, rename_ratio);
-		}
-
-		return score;
-	}
 
 	/**
 	 * @brief Detect temporal anomalies

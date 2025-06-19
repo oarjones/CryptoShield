@@ -1,0 +1,148 @@
+{
+    "behavioral_detection": {
+        "enabled": true,
+        "max_ops_per_second": 10.0,
+        "min_directories": 3,
+        "min_extensions": 2,
+        "min_operations": 50,
+        "suspicion_score_threshold": 0.7,
+        "suspicious_extensions": [
+            ".locked",
+            ".encrypted",
+            ".crypto",
+            ".enc",
+            ".crypted",
+            ".kraken",
+            ".darkness",
+            ".nochance"
+        ],
+        "suspicious_patterns_regex": [
+            ".*\\.id-[0-9A-F]{8}\\.[a-z]+@[a-z]+\\.[a-z]+$",
+            ".*\\.[0-9A-F]{32}$"
+        ],
+        "time_window_seconds": 60,
+        "track_directory_traversal": true,
+        "track_extension_changes": true,
+        "track_temporal_patterns": true,
+        "weight": 0.25
+    },
+    "entropy_analysis": {
+        "block_size": 4096,
+        "enable_advanced_analysis": true,
+        "enable_chi_square": true,
+        "enable_hamming_distance": true,
+        "enabled": true,
+        "max_file_size_for_analysis": 104857600,
+        "threshold_compressed": 7.8,
+        "threshold_databases": 5.5,
+        "threshold_executables": 6.0,
+        "threshold_images": 7.0,
+        "threshold_text_files": 4.5,
+        "threshold_unknown": 6.5,
+        "weight": 0.3
+    },
+    "false_positive_minimizer": {
+        "auto_whitelist_signed": false,
+        "enable_behavioral_analysis": true,
+        "enable_reputation": true,
+        "enable_signature_verification": true,
+        "enable_whitelist": true,
+        "enabled": true,
+        "max_fp_adjustment": 0.8,
+        "min_reputation_score": 0.6,
+        "reputation_history_days": 30,
+        "strict_mode": false,
+        "trusted_backup_software": [
+            "Acronis",
+            "Veeam",
+            "Macrium"
+        ],
+        "trusted_compression_software": [
+            "WinRAR",
+            "7-Zip",
+            "WinZip"
+        ],
+        "trusted_dev_software": [
+            "devenv",
+            "cl.exe",
+            "gcc"
+        ],
+        "trusted_publishers": [
+            "Microsoft Corporation",
+            "Google LLC"
+        ],
+        "trusted_system_software": [
+            "TrustedInstaller",
+            "svchost"
+        ]
+    },
+    "global": {
+        "debug_mode": false,
+        "enable_detection": true,
+        "enable_logging": true,
+        "enable_telemetry": false,
+        "log_directory": "C:\\ProgramData\\CryptoShield\\Logs",
+        "log_retention_days": 30,
+        "max_log_size_mb": 100,
+        "max_memory_usage_mb": 200,
+        "thread_pool_size": 4
+    },
+    "pattern_database": {
+        "auto_update": false,
+        "database_file": "patterns.db",
+        "enable_custom_patterns": true,
+        "enable_fuzzy_matching": true,
+        "enabled": true,
+        "fuzzy_match_threshold": 0.8,
+        "max_patterns": 10000,
+        "min_pattern_confidence": 0.5,
+        "update_interval_hours": 24
+    },
+    "performance": {
+        "analysis_timeout_ms": 5000,
+        "batch_processing_size": 100,
+        "cache_size_mb": 50,
+        "cpu_usage_limit_percent": 50.0,
+        "enable_adaptive_performance": true,
+        "enable_gpu_acceleration": false,
+        "enable_simd_optimization": true,
+        "max_concurrent_analyses": 10
+    },
+    "response": {
+        "enable_alerts": true,
+        "enable_auto_response": true,
+        "enable_file_quarantine": true,
+        "enable_network_isolation": false,
+        "enable_process_termination": true,
+        "logging_only_mode": false,
+        "response_delay_ms": 1000
+    },
+    "scoring": {
+        "behavioral_weight": 0.25,
+        "confidence_boost_threshold": 0.8,
+        "enable_confidence_boosting": true,
+        "enable_detailed_explanation": true,
+        "enable_fp_reduction": true,
+        "entropy_weight": 0.3,
+        "false_positive_weight": 0.15,
+        "system_activity_weight": 0.25,
+        "temporal_weight": 0.2,
+        "threshold_critical": 0.95,
+        "threshold_high": 0.8,
+        "threshold_low": 0.3,
+        "threshold_medium": 0.6
+    },
+    "system_monitoring": {
+        "command_history_size": 1000,
+        "enabled": true,
+        "monitor_boot_config": true,
+        "monitor_network": false,
+        "monitor_registry": true,
+        "monitor_security_software": true,
+        "monitor_shadow_copy": true,
+        "registry_history_size": 5000,
+        "weight": 0.25
+    },
+    "timestamp": 17493684529099654,
+    "version": "1.0"
+}
