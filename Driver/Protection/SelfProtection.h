@@ -14,6 +14,9 @@
 #include <fltKernel.h>
 #include "../CryptoShield.h"
 
+// Forward declaration para evitar dependencia circular de headers
+struct _HOOK_DETECTION_CONTEXT;
+
  // Protection configuration flags
 #define PROTECTION_FLAG_CALLBACK_GUARD      0x00000001
 #define PROTECTION_FLAG_MEMORY_INTEGRITY    0x00000002
