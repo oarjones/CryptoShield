@@ -67,7 +67,12 @@ NTSTATUS InitializeSdtTable(VOID);
 /**
  * @brief Checks if the SSDT has been hooked.
  * @details Iterates through SSDT entries and checks if any service points outside ntoskrnl.exe.
- * @return BOOLEAN TRUE if a hook is detected, FALSE otherwise.
+ * @param IsHooked Pointer to a BOOLEAN that will receive TRUE if a hook is detected, FALSE otherwise.
+ *                 This value is only valid if the function returns STATUS_SUCCESS.
+ * @return NTSTATUS Status of the operation. STATUS_SUCCESS if the check was performed,
+ *         or an error code if SSDT or ntoskrnl.exe boundaries could not be accessed/verified.
  * @warning This function should be called carefully, considering IRQL and SSDT access specifics.
  */
-BOOLEAN IsSdtHooked(VOID);
+NTSTATUS IsSdtHooked(
+    _Out_ PBOOLEAN IsHooked
+);

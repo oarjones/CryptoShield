@@ -28,9 +28,28 @@ NTSTATUS InitializeMemoryIntegrity(
  *          with the initially stored checksum. This can be called periodically,
  *          potentially from a DPC routine.
  *
- * @return BOOLEAN TRUE if the checksums match (memory is intact), FALSE otherwise.
+ * @param IsIntact Pointer to a BOOLEAN that will receive TRUE if memory is intact, FALSE otherwise.
+ *                 This value is only valid if the function returns STATUS_SUCCESS.
+ * @return NTSTATUS Status of the operation. STATUS_SUCCESS if the check was performed,
+ *         or an error code if checksum calculation failed.
  */
-BOOLEAN IsDriverMemoryIntact(VOID);
+NTSTATUS IsDriverMemoryIntact(
+    _Out_ PBOOLEAN IsIntact
+);
+
+/**
+ * @brief Defines a function pointer type for checksum calculation algorithms.
+ *
+ * @param BaseAddress Pointer to the base of the memory region.
+ * @param Size Size of the memory region in bytes.
+ * @param pChecksum Pointer to a ULONG64 to store the calculated checksum.
+ * @return NTSTATUS Status of the operation. STATUS_SUCCESS on success.
+ */
+typedef NTSTATUS (*PCHECKSUM_FUNCTION)(
+    _In_ PVOID BaseAddress,
+    _In_ ULONG Size,
+    _Out_ PULONG64 pChecksum
+);
 
 /**
  * @brief Cleans up resources or context related to memory integrity protection.

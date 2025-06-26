@@ -27,7 +27,7 @@
  *       PASSIVE_LEVEL is fine. If called from DPC (DISPATCH_LEVEL), ImageBase must be non-paged.
  *       The .text section of a driver is non-paged.
  */
-NTSTATUS CalculateDriverChecksum(
+static NTSTATUS XorSumChecksum(
     _In_ PVOID ImageBase,
     _In_ ULONG ImageSize,
     _Out_ PULONG64 pChecksum
@@ -37,10 +37,12 @@ NTSTATUS CalculateDriverChecksum(
     PUCHAR  bytePtr = (PUCHAR)ImageBase;
     ULONG   i;
 
-    // Ensure parameters are valid, though context suggests DriverObject values will be.
-    if (ImageBase == NULL || ImageSize == 0 || pChecksum == NULL) {
-        return STATUS_INVALID_PARAMETER;
-    }
+    // Parameter validation is expected to be done by the caller (CalculateDriverChecksum)
+    // or implicitly by this function's usage context.
+    // However, basic check for pChecksum is good.
+    if (pChecksum == NULL) return STATUS_INVALID_PARAMETER; // ImageBase/ImageSize checked by caller
+
+    *pChecksum = 0; // Initialize output
 
     // Simple checksum: sum of bytes XORed with an evolving value.
     // This is not cryptographically strong but serves as a basic integrity check.
@@ -54,12 +56,37 @@ NTSTATUS CalculateDriverChecksum(
         *pChecksum = checksum;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         NTSTATUS status = GetExceptionCode();
-        CS_LOG_ERROR("Exception 0x%X while calculating checksum for memory at %p, size %lu.",
+        CS_LOG_ERROR("Exception 0x%X while calculating XorSum checksum for memory at %p, size %lu.",
                      status, ImageBase, ImageSize);
         return status; // Or STATUS_ACCESS_VIOLATION
     }
 
     return STATUS_SUCCESS;
+}
+
+/**
+ * @brief Calculates a checksum of the specified memory region using a provided hash function.
+ * @details This function acts as a wrapper to call the specified checksum algorithm.
+ *
+ * @param ImageBase Pointer to the base of the memory region.
+ * @param ImageSize Size of the memory region in bytes.
+ * @param pChecksum Pointer to a ULONG64 to store the calculated checksum.
+ * @param HashFunction Pointer to the checksum function to use.
+ * @return NTSTATUS Status of the operation. STATUS_SUCCESS on success.
+ */
+NTSTATUS CalculateDriverChecksum(
+    _In_ PVOID ImageBase,
+    _In_ ULONG ImageSize,
+    _Out_ PULONG64 pChecksum,
+    _In_ PCHECKSUM_FUNCTION HashFunction
+)
+{
+    if (ImageBase == NULL || ImageSize == 0 || pChecksum == NULL || HashFunction == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    // Call the provided hash function
+    return HashFunction(ImageBase, ImageSize, pChecksum);
 }
 
 /**
@@ -101,7 +128,8 @@ NTSTATUS InitializeMemoryIntegrity(
     status = CalculateDriverChecksum(
         g_Context.DriverImageBase,
         g_Context.DriverImageSize,
-        &g_Context.InitialDriverChecksum
+        &g_Context.InitialDriverChecksum,
+        XorSumChecksum // Pass the XorSumChecksum function
     );
 
     if (!NT_SUCCESS(status)) {
@@ -122,45 +150,63 @@ NTSTATUS InitializeMemoryIntegrity(
  * @details Recalculates the checksum of the driver's code and compares it
  *          with the initially stored checksum.
  *
- * @return BOOLEAN TRUE if the checksums match (memory is intact), FALSE otherwise.
+ * @param IsIntact Pointer to a BOOLEAN that will receive TRUE if memory is intact, FALSE otherwise.
+ *                 This value is only valid if the function returns STATUS_SUCCESS.
+ * @return NTSTATUS Status of the operation. STATUS_SUCCESS if the check was performed,
+ *         or an error code if checksum calculation failed.
  *
  * @note This function can be called from a DPC routine (DISPATCH_LEVEL).
  *       It relies on g_Context.DriverImageBase and g_Context.DriverImageSize
  *       being valid and pointing to non-paged memory (driver's code section).
  */
-BOOLEAN IsDriverMemoryIntact(VOID)
+NTSTATUS IsDriverMemoryIntact(
+    _Out_ PBOOLEAN IsIntact
+)
 {
     ULONG64 currentChecksum = 0;
     NTSTATUS status;
 
     // CS_ASSERT_IRQL_DISPATCH_LEVEL_OR_BELOW(); // Or the specific IRQL it's designed for
 
+    if (IsIntact == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *IsIntact = FALSE; // Default to not intact or error state
+
     if (g_Context.DriverImageBase == NULL || g_Context.DriverImageSize == 0) {
         CS_LOG_WARNING("Driver image base or size not initialized. Cannot verify memory integrity.");
-        return TRUE; // Fail safe: if not initialized, assume intact to avoid false alarms until properly set up.
-                     // Or return FALSE if strictness is required, but this might trigger alerts if called before init.
-                     // Given it's a periodic check, it should eventually run after init.
+        // Consider if this case should return an error or STATUS_SUCCESS with IsIntact = TRUE (fail-safe).
+        // For this refactoring, let's treat it as a setup issue that prevents checking.
+        // However, the original logic returned TRUE (fail-safe).
+        // To maintain similar behavior for the "unable to check" scenario, we could return success and IsIntact = TRUE.
+        // But the request implies differentiating errors from tampering.
+        // Let's return an error indicating configuration issue.
+        return STATUS_OBJECT_NOT_INITIALIZED; // Or a custom status
     }
 
     status = CalculateDriverChecksum(
         g_Context.DriverImageBase,
         g_Context.DriverImageSize,
-        &currentChecksum
+        &currentChecksum,
+        XorSumChecksum // Pass the XorSumChecksum function
     );
 
     if (!NT_SUCCESS(status)) {
         CS_LOG_ERROR("Failed to calculate current driver checksum during integrity check. Status: 0x%X", status);
-        return FALSE; // Treat calculation failure as a potential integrity issue or error.
+        // IsIntact remains FALSE by default or previous assignment
+        return status; // Return the error from CalculateDriverChecksum
     }
 
     if (currentChecksum != g_Context.InitialDriverChecksum) {
-        CS_LOG_WARNING("Current driver checksum 0x%llX does not match initial checksum 0x%llX.",
+        CS_LOG_WARNING("Current driver checksum 0x%llX does not match initial checksum 0x%llX. Memory may be tampered.",
                        currentChecksum, g_Context.InitialDriverChecksum);
-        return FALSE; // Checksums do not match, memory may have been tampered with.
+        *IsIntact = FALSE; // Checksums do not match, memory may have been tampered with.
+    } else {
+        *IsIntact = TRUE; // Checksums match.
+        CS_LOG_TRACE("Driver memory integrity check passed. Checksum: 0x%llX", currentChecksum);
     }
 
-    CS_LOG_TRACE("Driver memory integrity check passed. Checksum: 0x%llX", currentChecksum);
-    return TRUE; // Checksums match.
+    return STATUS_SUCCESS; // Check was performed successfully
 }
 
 /**

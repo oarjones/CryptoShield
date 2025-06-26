@@ -201,53 +201,45 @@ NTSTATUS GetNtoskrnlBoundaries(
 /**
  * @brief Checks if the SSDT has been hooked.
  * @details Iterates through SSDT entries and checks if any service points outside ntoskrnl.exe.
- * @return BOOLEAN TRUE if a hook is detected, FALSE otherwise.
+ * @param IsHooked Pointer to a BOOLEAN that will receive TRUE if a hook is detected, FALSE otherwise.
+ *                 This value is only valid if the function returns STATUS_SUCCESS.
+ * @return NTSTATUS Status of the operation. STATUS_SUCCESS if the check was performed,
+ *         or an error code if SSDT or ntoskrnl.exe boundaries could not be accessed/verified.
  * @warning This function should be called carefully, considering IRQL and SSDT access specifics.
  *          Accessing SSDT directly is highly version-dependent and can be unstable.
- *          This is a placeholder and needs a robust way to find SSDT.
  */
-BOOLEAN IsSdtHooked(VOID)
+NTSTATUS IsSdtHooked(
+    _Out_ PBOOLEAN IsHooked
+)
 {
     // CS_ASSERT_IRQL_DISPATCH_LEVEL_OR_BELOW(); // Or specific IRQL if known
 
-    // Placeholder: SSDT detection is complex and architecture-dependent.
-    // A robust implementation requires finding KeServiceDescriptorTable,
-    // which is not directly exported on all Windows versions.
-    // This often involves pattern scanning or using known offsets (unreliable).
+    if (IsHooked == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *IsHooked = FALSE; // Default to not hooked or error state
 
+    // Ensure ntoskrnl.exe boundaries are available
+    // This check is critical. If g_NtoskrnlInfo is not initialized, we cannot proceed.
+    // GetNtoskrnlBoundaries is PAGED_CODE and cannot be called at DISPATCH_LEVEL.
+    // It must be initialized during DriverEntry or another PASSIVE_LEVEL context.
     if (g_NtoskrnlInfo.BaseAddress == NULL || g_NtoskrnlInfo.Size == 0) {
         CS_LOG_WARNING("Ntoskrnl.exe boundaries not initialized. Cannot perform SSDT check.");
-        // Attempt to initialize them now. This might be problematic if called at high IRQL.
-        // For now, assume it's called where GetNtoskrnlBoundaries can run or has already run.
-        // A better design would ensure GetNtoskrnlBoundaries is called during driver init.
-        NTSTATUS init_status = GetNtoskrnlBoundaries(&g_NtoskrnlInfo); // This call might fail if not at PASSIVE_LEVEL
-        if (!NT_SUCCESS(init_status) || g_NtoskrnlInfo.BaseAddress == NULL) {
-             CS_LOG_ERROR("Failed to get ntoskrnl boundaries for SSDT check. Status: 0x%X", init_status);
-             return FALSE; // Cannot proceed
-        }
+        // This is an initialization error. Return an appropriate status.
+        return STATUS_OBJECT_NOT_INITIALIZED; // Indicates a prerequisite is missing
+    }
+
+    // Ensure KeServiceDescriptorTable is available
+    if (g_KeServiceDescriptorTable == NULL || g_KeServiceDescriptorTable->ServiceTableBase == NULL) {
+        CS_LOG_WARNING("KeServiceDescriptorTable not initialized or invalid. Cannot perform SSDT check.");
+        return STATUS_OBJECT_NOT_INITIALIZED; // Indicates a prerequisite is missing
     }
 
     PVOID pSdtServiceAddress = NULL;
     ULONG_PTR ulNtoskrnlStart = (ULONG_PTR)g_NtoskrnlInfo.BaseAddress;
     ULONG_PTR ulNtoskrnlEnd = ulNtoskrnlStart + g_NtoskrnlInfo.Size;
-    PULONG pServiceTable = NULL;
-    ULONG_PTR ulNumberOfServices = 0;
-
-    // This function might be called at DISPATCH_LEVEL by the DPC timer.
-    // Ensure g_NtoskrnlInfo and g_KeServiceDescriptorTable are initialized.
-    if (g_NtoskrnlInfo.BaseAddress == NULL || g_NtoskrnlInfo.Size == 0) {
-        CS_LOG_WARNING("Ntoskrnl.exe boundaries not initialized. Cannot perform SSDT check.");
-        // It's too late/dangerous to call GetNtoskrnlBoundaries here if at DISPATCH_LEVEL
-        return FALSE;
-    }
-
-    if (g_KeServiceDescriptorTable == NULL || g_KeServiceDescriptorTable->ServiceTableBase == NULL) {
-        CS_LOG_WARNING("KeServiceDescriptorTable not initialized or invalid. Cannot perform SSDT check.");
-        return FALSE; // SSDT not found or invalid.
-    }
-
-    pServiceTable = g_KeServiceDescriptorTable->ServiceTableBase;
-    ulNumberOfServices = g_KeServiceDescriptorTable->NumberOfServices;
+    PULONG pServiceTable = g_KeServiceDescriptorTable->ServiceTableBase;
+    ULONG_PTR ulNumberOfServices = g_KeServiceDescriptorTable->NumberOfServices;
 
     // Iterate through the SSDT entries
     for (ULONG_PTR i = 0; i < ulNumberOfServices; i++) {
@@ -304,8 +296,21 @@ BOOLEAN IsSdtHooked(VOID)
         // Let's use a simplified access model for demonstration, assuming ServiceTableBase holds direct pointers or easily calculable ones.
         // This is often true for Shadow SSDTs or specific system configurations.
         // If KeServiceDescriptorTable->ServiceTableBase points to an array of ULONG_PTRs (function pointers):
-        pSdtServiceAddress = (PVOID)((PULONG_PTR)pServiceTable)[i];
 
+        /*
+         * TODO: [MEJORA DE ROBUSTEZ] El acceso directo a la SSDT en x64 es inherentemente inseguro
+         * debido a PatchGuard. Este método es una simplificación para fines de demostración.
+         *
+         * Una implementación de producción debería utilizar una técnica más segura, como:
+         * 1. Obtener la dirección de una función Nt* conocida usando MmGetSystemRoutineAddress.
+         * 2. Obtener el ID de la syscall correspondiente a esa función (parseando ntdll.dll).
+         * 3. Acceder al índice de la SSDT usando ese ID y comparar la dirección encontrada
+         * con la obtenida en el paso 1.
+         *
+         * Esto evita lecturas directas que PatchGuard podría detectar como maliciosas
+         * y proporciona una verificación más fiable.
+         */
+        pSdtServiceAddress = (PVOID)((PULONG_PTR)pServiceTable)[i]; // Acceso simplificado actual
 
 #else // _WIN32
         // On x86, SSDT entries are direct pointers.
@@ -323,10 +328,12 @@ BOOLEAN IsSdtHooked(VOID)
             // For this exercise, any address outside ntoskrnl.exe is considered a hook.
             CS_LOG_ERROR("SSDT Hook Detected! Service index %lu (Address: %p) points outside ntoskrnl.exe (%p - %p).",
                          (ULONG)i, pSdtServiceAddress, (PVOID)ulNtoskrnlStart, (PVOID)ulNtoskrnlEnd);
-            return TRUE; // Hook detected
+            *IsHooked = TRUE; // Hook detected
+            return STATUS_SUCCESS; // Check performed, hook found
         }
     }
 
+    *IsHooked = FALSE; // No hooks detected after checking all entries
     CS_LOG_TRACE("IsSdtHooked: No SSDT hooks detected pointing outside ntoskrnl.exe.");
-    return FALSE; // No hooks detected
+    return STATUS_SUCCESS; // Check performed, no hooks found
 }

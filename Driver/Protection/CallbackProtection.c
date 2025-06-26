@@ -62,19 +62,23 @@ VOID IntegrityCheckDpcRoutine(
         // Future: Trigger more actions (e.g., notify user-mode, attempt restoration if safe).
     }
 
-    // Check for SSDT hooks
-    // IsSdtHooked itself logs if a hook is detected.
-    // We log a general alert here as well, or rely on IsSdtHooked's specific log.
-    // For consistency with the request, log here.
-    if (IsSdtHooked()) { // This function should log specifics internally
-        CS_LOG_ERROR("¡ALERTA DE TAMPERING! Se ha detectado un hook en la SSDT.");
-    }
+    NTSTATUS integrityStatus;
+    BOOLEAN isTampered; // For IsDriverMemoryIntact, isTampered is !isIntact. For IsSdtHooked, isTampered is IsHooked.
 
     // Check for driver memory modification
-    // IsDriverMemoryIntact itself logs if a modification is detected.
-    // Log a general alert here as well.
-    if (!IsDriverMemoryIntact()) { // This function should log specifics internally
+    integrityStatus = IsDriverMemoryIntact(&isTampered); // Here, isTampered means memory IS intact if TRUE
+    if (!NT_SUCCESS(integrityStatus)) {
+        CS_LOG_ERROR("No se pudo verificar la integridad de la memoria del driver. Status: 0x%X", integrityStatus);
+    } else if (!isTampered) { // If IsDriverMemoryIntact returns TRUE for isTampered, it means intact. So !isTampered means tampered.
         CS_LOG_ERROR("¡ALERTA DE TAMPERING! La memoria del driver ha sido modificada.");
+    }
+
+    // Check for SSDT hooks
+    integrityStatus = IsSdtHooked(&isTampered); // Here, isTampered means a hook IS detected if TRUE
+    if (!NT_SUCCESS(integrityStatus)) {
+        CS_LOG_ERROR("No se pudo verificar la SSDT en busca de hooks. Status: 0x%X", integrityStatus);
+    } else if (isTampered) { // If IsSdtHooked returns TRUE for isTampered, it means a hook was detected.
+        CS_LOG_ERROR("¡ALERTA DE TAMPERING! Se ha detectado un hook en la SSDT.");
     }
 
     // Note: The DPC routine should complete as quickly as possible.
