@@ -7,6 +7,7 @@
  */
 
 #include "CryptoShield.h" // Incluye Shared.h indirectamente
+#include "Protection/CallbackProtection.h" // For callback protection functions
 
  // ----- Global Driver Context -----
 CRYPTOSHIELD_CONTEXT g_Context = { 0 };
@@ -183,6 +184,22 @@ NTSTATUS DriverEntry(
         return status;
     }
 
+    // Initialize callback protection
+    CS_LOG_TRACE("Initializing callback protection mechanism...");
+    status = InitializeCallbackProtection(g_Context.FilterHandle);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to initialize callback protection: 0x%08X", status);
+        // Cleanup previously initialized resources
+        FltStopFiltering(g_Context.FilterHandle); // Stop filtering first
+        FltCloseCommunicationPort(g_Context.ServerPort);
+        g_Context.ServerPort = NULL;
+        FltUnregisterFilter(g_Context.FilterHandle);
+        g_Context.FilterHandle = NULL;
+        ExDeleteResourceLite(&g_Context.PortResource);
+        // CleanupCallbackProtection() is not called here as it might not have been fully initialized
+        return status;
+    }
+
     CS_LOG_INFO("CryptoShield driver loaded successfully.");
     return STATUS_SUCCESS;
 }
@@ -201,6 +218,9 @@ NTSTATUS FilterUnloadCallback(
     PAGED_CODE(); // Esta rutina debe ser paginable
 
     CS_LOG_INFO("CryptoShield driver unloading...");
+
+    // Clean up callback protection first
+    CleanupCallbackProtection();
 
     // Indicar que el driver se está descargando para detener nuevas operaciones/mensajes.
     InterlockedExchange8((CHAR*)&g_Context.IsUnloading, TRUE);

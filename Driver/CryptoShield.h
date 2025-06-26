@@ -60,6 +60,12 @@ typedef struct _CRYPTOSHIELD_CONTEXT {
     // ULONG MonitoredProcessesCount; // Si se lleva cuenta de procesos específicos
     // ULONG CurrentMemoryUsageKB;  // Si se monitorea el uso de memoria
     ULONG UserModeProcessId; // <-- AÑADE ESTA LÍNEA
+
+    // Callback Table Protection
+    PVOID CallbackTableBackup;      // Backup de la tabla de callbacks
+    ULONG CallbackTableSize;        // Tamaño de la tabla
+    KTIMER IntegrityTimer;          // Timer para la verificación periódica
+    KDPC IntegrityDpc;              // DPC para ejecutar la verificación
 } CRYPTOSHIELD_CONTEXT, * PCRYPTOSHIELD_CONTEXT;
 
 // Global driver context
