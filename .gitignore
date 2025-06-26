@@ -8,8 +8,6 @@
 *.vcxproj.user
 
 
-## Dcoumentación del proyecto
-/Docs/
 
 ## Visual Studio Code (VS Code) - configuraciones específicas del espacio de trabajo
 .vscode/*
