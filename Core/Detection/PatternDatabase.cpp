@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file PatternDatabase.cpp
  * @brief Pattern database implementation (Part 1)
  * @details Implements pattern storage, initialization and basic management

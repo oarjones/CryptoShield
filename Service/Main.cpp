@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * @file Main.cpp
  * @brief Entry point for CryptoShield service
  * @details Windows service that communicates with kernel driver
@@ -114,10 +114,10 @@ int wmain(int argc, wchar_t* argv[])
         else if (command == L"/generate-config") {
             std::wcout << L"Generating default configuration file (detection_config.json)..." << std::endl;
 
-            // Creamos una instancia del gestor de configuración
+            // Creamos una instancia del gestor de configuraciÃ³n
             auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
 
-            // La configuración por defecto ya se carga en el constructor del manager.
+            // La configuraciÃ³n por defecto ya se carga en el constructor del manager.
             // Ahora, simplemente la guardamos a un fichero.
             if (config_manager->SaveConfiguration(L"detection_config.json")) {
                 std::wcout << L"Default configuration file 'detection_config.json' created successfully." << std::endl;
@@ -342,7 +342,7 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
                 break;
             }
 
-            // La construcción del mensaje ahora es segura
+            // La construcciÃ³n del mensaje ahora es segura
             std::wstring alert_message = L"[" + severity_str.str() + L"] " + alert.description;
             WriteEventLog(EVENTLOG_WARNING_TYPE, alert_message);
         }

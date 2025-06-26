@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file SystemActivityMonitor.h
  * @brief System activity monitoring for ransomware detection

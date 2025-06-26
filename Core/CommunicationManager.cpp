@@ -1,4 +1,4 @@
-/**
+Ôªø/**
  * @file CommunicationManager.cpp
  * @brief Driver communication management implementation
  * @details Handles bidirectional communication with kernel driver
@@ -65,8 +65,8 @@ namespace CryptoShield {
 		HRESULT hr = FilterConnectCommunicationPort(
 			port_name_.c_str(),
 			0,                          // Opciones
-			&processId,                 // <-- MODIFICA ESTA LÕNEA (Contexto: pasamos el PID)
-			sizeof(processId),          // <-- MODIFICA ESTA LÕNEA (TamaÒo del contexto)
+			&processId,                 // <-- MODIFICA ESTA L√çNEA (Contexto: pasamos el PID)
+			sizeof(processId),          // <-- MODIFICA ESTA L√çNEA (Tama√±o del contexto)
 			nullptr,                    // Atributos de seguridad
 			&filter_port_
 		);
@@ -181,9 +181,9 @@ namespace CryptoShield {
 		payload.NewDetectionSensitivity = new_detection_sensitivity;
 		payload.NewResponseActions = new_response_actions;
 
-		// --- INICIO DE LA MODIFICACI”N ---
+		// --- INICIO DE LA MODIFICACI√ìN ---
 
-		// CÛdigo ANTIGUO con el workaround:
+		// C√≥digo ANTIGUO con el workaround:
 		/*
 		struct DUMMY_REPLY {
 			FILTER_REPLY_HEADER Header;
@@ -201,20 +201,20 @@ namespace CryptoShield {
 		);
 		*/
 
-		// CÛdigo NUEVO y correcto:
+		// C√≥digo NUEVO y correcto:
 		// Enviamos el mensaje sin esperar un payload de respuesta.
-		// Pasamos nullptr a los par·metros de respuesta. La funciÛn SendMessage
-		// ya est· preparada para manejar este caso.
+		// Pasamos nullptr a los par√°metros de respuesta. La funci√≥n SendMessage
+		// ya est√° preparada para manejar este caso.
 		bool result = SendMessage(
 			&payload,
 			sizeof(payload),
 			nullptr, // No hay buffer de respuesta
-			0,       // El tamaÒo del buffer es 0
+			0,       // El tama√±o del buffer es 0
 			nullptr, // No necesitamos saber los bytes devueltos
 			1000
 		);
 
-		// --- FIN DE LA MODIFICACI”N ---
+		// --- FIN DE LA MODIFICACI√ìN ---
 
 
 		if (result) {
@@ -265,9 +265,9 @@ namespace CryptoShield {
 			return false;
 		}
 
-		// --- INICIO DE LA MODIFICACI”N DE LA L”GICA DE VALIDACI”N ---
+		// --- INICIO DE LA MODIFICACI√ìN DE LA L√ìGICA DE VALIDACI√ìN ---
 
-		// 1. Validar que hemos recibido suficientes bytes para, como mÌnimo, la cabecera est·ndar
+		// 1. Validar que hemos recibido suficientes bytes para, como m√≠nimo, la cabecera est√°ndar
 		//    y la cabecera de nuestro propio payload.
 		const size_t min_reply_size = sizeof(FILTER_REPLY_HEADER) + sizeof(CS_MESSAGE_PAYLOAD_HEADER);
 		if (bytes_returned < min_reply_size) {
@@ -275,19 +275,19 @@ namespace CryptoShield {
 			return false;
 		}
 
-		// 2. Obtener el tamaÒo del payload que el *driver* dice que ha enviado.
-		//    Este valor est· dentro de la propia respuesta.
+		// 2. Obtener el tama√±o del payload que el *driver* dice que ha enviado.
+		//    Este valor est√° dentro de la propia respuesta.
 		PCS_MESSAGE_PAYLOAD_HEADER reply_header = reinterpret_cast<PCS_MESSAGE_PAYLOAD_HEADER>(reply_buffer.data() + sizeof(FILTER_REPLY_HEADER));
 		const size_t driver_payload_size = reply_header->PayloadSize;
 
-		// 3. Validar que el tamaÒo total recibido coincide con lo que el driver reporta.
+		// 3. Validar que el tama√±o total recibido coincide con lo que el driver reporta.
 		const size_t expected_total_size = sizeof(FILTER_REPLY_HEADER) + driver_payload_size;
 		if (bytes_returned < expected_total_size) {
 			LogError("RequestStatus - Total bytes returned is less than what the driver's payload header indicates", ERROR_INVALID_DATA);
 			return false;
 		}
 
-		// 4. ComprobaciÛn de diagnÛstico: comparar el tamaÒo del payload del driver con el del servicio.
+		// 4. Comprobaci√≥n de diagn√≥stico: comparar el tama√±o del payload del driver con el del servicio.
 		//    Si son diferentes, hay una inconsistencia en Shared.h entre los dos proyectos.
 		if (driver_payload_size != sizeof(CS_STATUS_REPLY_PAYLOAD)) {
 			std::wcerr << L"[CommunicationManager] Mismatch detected in CS_STATUS_REPLY_PAYLOAD size!" << std::endl;
@@ -300,7 +300,7 @@ namespace CryptoShield {
 			return false;
 		}
 
-		// --- FIN DE LA MODIFICACI”N ---
+		// --- FIN DE LA MODIFICACI√ìN ---
 
 		// Si todas las validaciones pasan, es seguro copiar los datos.
 		PCS_STATUS_REPLY_PAYLOAD actual_reply_payload =
@@ -308,7 +308,7 @@ namespace CryptoShield {
 
 		status_reply_data = *actual_reply_payload;
 
-		// Esta lÌnea se puede comentar o eliminar si no se quiere spam en la consola
+		// Esta l√≠nea se puede comentar o eliminar si no se quiere spam en la consola
 		// std::wcout << L"[CommunicationManager] Status received successfully." << std::endl;
 
 		return true;
@@ -320,17 +320,17 @@ namespace CryptoShield {
 	bool CommunicationManager::RequestShutdown()
 	{
 		if (!connected_.load()) {
-			// ERROR_NOT_CONNECTED (2250L) es un cÛdigo de error est·ndar de Win32.
-			// DeberÌa estar disponible si <windows.h> est· incluido correctamente.
+			// ERROR_NOT_CONNECTED (2250L) es un c√≥digo de error est√°ndar de Win32.
+			// Deber√≠a estar disponible si <windows.h> est√° incluido correctamente.
 			LogError("RequestShutdown", ERROR_NOT_CONNECTED);
 			return false;
 		}
 
 		// Construir el payload para la solicitud de apagado.
-		// Dado que Shared.h no define una estructura CS_SHUTDOWN_REQUEST_PAYLOAD especÌfica
-		// que contenga m·s que la cabecera, podemos usar CS_MESSAGE_PAYLOAD_HEADER
+		// Dado que Shared.h no define una estructura CS_SHUTDOWN_REQUEST_PAYLOAD espec√≠fica
+		// que contenga m√°s que la cabecera, podemos usar CS_MESSAGE_PAYLOAD_HEADER
 		// directamente o una estructura local simple que la envuelva.
-		// Usaremos una estructura local para mantener la coherencia con cÛmo se manejan
+		// Usaremos una estructura local para mantener la coherencia con c√≥mo se manejan
 		// otros payloads como CS_STATUS_REQUEST_PAYLOAD.
 
 		struct ShutdownRequestPayload {
@@ -339,19 +339,19 @@ namespace CryptoShield {
 		} request_payload = {}; // Inicializa a ceros
 
 		request_payload.Header.MessageType = MSG_TYPE_SHUTDOWN_REQUEST; // Definido en Shared.h
-		request_payload.Header.MessageId = 0; // O un ID ˙nico si se implementa seguimiento de mensajes
-		request_payload.Header.PayloadSize = sizeof(request_payload); // TamaÒo de nuestra estructura local
+		request_payload.Header.MessageId = 0; // O un ID √∫nico si se implementa seguimiento de mensajes
+		request_payload.Header.PayloadSize = sizeof(request_payload); // Tama√±o de nuestra estructura local
 
 		// Enviar el mensaje al driver.
 		// Las solicitudes de apagado generalmente no esperan un payload de datos como respuesta del driver;
-		// el driver act˙a sobre la solicitud.
-		// La funciÛn SendMessage ya tiene manejo de errores y logging interno para fallos de FilterSendMessage.
+		// el driver act√∫a sobre la solicitud.
+		// La funci√≥n SendMessage ya tiene manejo de errores y logging interno para fallos de FilterSendMessage.
 		bool result = SendMessage(
 			&request_payload,                // Puntero al payload
-			sizeof(request_payload),         // TamaÒo del payload
+			sizeof(request_payload),         // Tama√±o del payload
 			nullptr,                         // No se espera un buffer de respuesta con datos
-			0,                               // TamaÒo del buffer de respuesta es 0
-			nullptr,                         // No se necesita el n˙mero de bytes devueltos para esta llamada
+			0,                               // Tama√±o del buffer de respuesta es 0
+			nullptr,                         // No se necesita el n√∫mero de bytes devueltos para esta llamada
 			1000                             // Timeout en milisegundos (ej. 1 segundo)
 		);
 
@@ -359,8 +359,8 @@ namespace CryptoShield {
 			std::wcout << L"[CommunicationManager] Shutdown request sent successfully." << std::endl;
 		}
 		else {
-			// SendMessage ya deberÌa haber llamado a LogError si FilterSendMessage fallÛ.
-			// Se podrÌa aÒadir un log especÌfico aquÌ si 'result' es falso por otras razones,
+			// SendMessage ya deber√≠a haber llamado a LogError si FilterSendMessage fall√≥.
+			// Se podr√≠a a√±adir un log espec√≠fico aqu√≠ si 'result' es falso por otras razones,
 			// aunque es improbable si SendMessage maneja bien todos los casos de error de la API.
 			std::wcerr << L"[CommunicationManager] Failed to send shutdown request." << std::endl;
 		}

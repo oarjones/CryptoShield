@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file DetectionConfig.cpp
  * @brief Unified configuration system implementation
  * @details Manages loading, saving, and validation of detection engine configuration

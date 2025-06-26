@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file MessageProcessor.h
  * @brief Message processing and analysis interface
  * @details Processes file operation messages and manages analysis queue
@@ -49,7 +49,7 @@ namespace CryptoShield {
         ULONG deletes;
         ULONG renames;
         ULONG set_information;
-        ULONG suspicious_operations; // <-- MIEMBRO A�ADIDO
+        ULONG suspicious_operations; // <-- MIEMBRO AÑADIDO
         std::chrono::steady_clock::time_point start_time;
         std::chrono::steady_clock::time_point last_operation;
     };

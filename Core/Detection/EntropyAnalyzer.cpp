@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file EntropyAnalyzer.cpp
  * @brief Entropy analysis implementation for ransomware detection
  * @details Optimized Shannon entropy, Chi-square, and Hamming distance calculations

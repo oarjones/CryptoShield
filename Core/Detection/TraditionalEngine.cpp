@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * @file TraditionalEngine.cpp
  * @brief Traditional detection engine implementation
  * @details Coordinates detection components for comprehensive ransomware analysis
@@ -300,15 +300,15 @@ namespace CryptoShield::Detection {
     EngineStatsData TraditionalEngine::GetStatistics() const
     {
         EngineStatsData data;
-        // Carga los valores de forma atómica. El .load() es opcional para tipos simples
-        // pero es una buena práctica para claridad.
+        // Carga los valores de forma atÃ³mica. El .load() es opcional para tipos simples
+        // pero es una buena prÃ¡ctica para claridad.
         data.operations_analyzed = statistics_.operations_analyzed.load();
         data.threats_detected = statistics_.threats_detected.load();
         data.false_positives_prevented = statistics_.false_positives_prevented.load();
 
-        // Los double no son atómicos, así que deben protegerse con un mutex si se
-        // modifican desde múltiples hilos, o asegurarse de que solo un hilo los escribe.
-        // Asumiendo que están protegidos, los copiamos directamente.
+        // Los double no son atÃ³micos, asÃ­ que deben protegerse con un mutex si se
+        // modifican desde mÃºltiples hilos, o asegurarse de que solo un hilo los escribe.
+        // Asumiendo que estÃ¡n protegidos, los copiamos directamente.
         data.average_analysis_time_ms = statistics_.average_analysis_time_ms;
         data.average_confidence_score = statistics_.average_confidence_score;
 
@@ -457,22 +457,22 @@ namespace CryptoShield::Detection {
             info.process_id = op.process_id;
             info.type = static_cast<CryptoShield::FileOperationType>(op.operation_type);
 
-            // 1. Asignación directa y eficiente de std::wstring.
+            // 1. AsignaciÃ³n directa y eficiente de std::wstring.
             info.file_path = op.file_path;
 
-            // 2. Conversión correcta de system_clock::time_point a FILETIME.
-            //    Obtenemos la duración desde el epoch de system_clock (1970-01-01).
+            // 2. ConversiÃ³n correcta de system_clock::time_point a FILETIME.
+            //    Obtenemos la duraciÃ³n desde el epoch de system_clock (1970-01-01).
             auto duration = op.timestamp.time_since_epoch();
 
             //    La convertimos a un formato compatible con FILETIME (intervalos de 100ns).
             auto filetime_duration = std::chrono::duration_cast<std::chrono::duration<int64_t, std::ratio<1, 10'000'000>>>(duration);
 
-            //    Creamos un objeto FILETIME a partir de esta duración.
+            //    Creamos un objeto FILETIME a partir de esta duraciÃ³n.
             FILETIME ft = { 0, 0 };
             *(int64_t*)&ft = filetime_duration.count();
 
-            //    Añadimos el offset entre el epoch de FILETIME (1601) y el de UNIX (1970).
-            //    116444736000000000LL es el número de intervalos de 100ns entre ambos epochs.
+            //    AÃ±adimos el offset entre el epoch de FILETIME (1601) y el de UNIX (1970).
+            //    116444736000000000LL es el nÃºmero de intervalos de 100ns entre ambos epochs.
             *(int64_t*)&ft += 116444736000000000LL;
 
             info.timestamp = ft;

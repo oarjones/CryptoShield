@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file SystemActivityMonitor.cpp
  * @brief System activity monitoring implementation
  * @details Implements shadow copy, registry, and boot config monitoring

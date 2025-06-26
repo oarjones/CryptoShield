@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file EntropyAnalyzer.h
  * @brief Entropy analysis for ransomware detection
@@ -221,7 +221,7 @@ namespace CryptoShield::Detection {
             FileType file_type);
 
 
-        // Este m�todo delega la llamada al miembro privado de forma segura
+        // Este método delega la llamada al miembro privado de forma segura
         double GetAdaptiveThreshold(FileType file_type) const {
             if (shannon_analyzer_) {
                 return shannon_analyzer_->GetAdaptiveThreshold(file_type);

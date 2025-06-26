@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file FalsePositiveMinimizer.h
  * @brief False positive reduction system for ransomware detection

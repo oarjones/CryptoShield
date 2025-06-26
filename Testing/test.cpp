@@ -1,4 +1,4 @@
-#include "pch.h"
+Ôªø#include "pch.h"
 #include "..\Core\Utils\StringUtils.h"
 
 
@@ -8,7 +8,7 @@ TEST(TestCaseName, TestName) {
   EXPECT_TRUE(true);
 }
 
-// Nuevo test: Prueba una conversiÛn b·sica de wstring a string (UTF-8)
+// Nuevo test: Prueba una conversi√≥n b√°sica de wstring a string (UTF-8)
 TEST(StringUtilsTest, BasicWStringToStringConversion) {
     // Arrange
     std::wstring wide_string = L"Hola Mundo";
@@ -21,7 +21,7 @@ TEST(StringUtilsTest, BasicWStringToStringConversion) {
     ASSERT_EQ(expected_string, actual_string);
 }
 
-// Nuevo test: Prueba el manejo de una cadena vacÌa
+// Nuevo test: Prueba el manejo de una cadena vac√≠a
 TEST(StringUtilsTest, EmptyWStringToStringConversion) {
     // Arrange
     std::wstring wide_string = L"";

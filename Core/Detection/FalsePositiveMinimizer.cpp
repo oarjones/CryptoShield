@@ -1,4 +1,4 @@
-/**
+Ôªø/**
  * @file FalsePositiveMinimizer.cpp
  * @brief False positive reduction system implementation
  * @details Implements legitimate software detection and score adjustment
@@ -946,13 +946,13 @@ namespace CryptoShield::Detection {
         for (const auto& op : operations) {
             std::wstring ext = std::filesystem::path(op.file_path).extension().wstring();
 
-            // Comprueba si la extensiÛn est· en la lista de extensiones de medios legÌtimos
+            // Comprueba si la extensi√≥n est√° en la lista de extensiones de medios leg√≠timos
             if (std::find(media_extensions.begin(), media_extensions.end(), ext) != media_extensions.end()) {
                 media_file_ops++;
             }
         }
 
-        // Considera la actividad como legÌtima si m·s del 70% de las operaciones son sobre archivos de medios.
+        // Considera la actividad como leg√≠tima si m√°s del 70% de las operaciones son sobre archivos de medios.
         double media_ratio = static_cast<double>(media_file_ops) / operations.size();
 
         return media_ratio > 0.7;
@@ -983,7 +983,7 @@ namespace CryptoShield::Detection {
             return false; // Si no es una herramienta de desarrollo, no es actividad de desarrollo.
         }
 
-        // Si es una herramienta de desarrollo, comprueba si las operaciones son sobre archivos de cÛdigo/compilaciÛn.
+        // Si es una herramienta de desarrollo, comprueba si las operaciones son sobre archivos de c√≥digo/compilaci√≥n.
         size_t dev_file_ops = 0;
         const auto& dev_extensions = LEGITIMATE_EXTENSIONS.at(SoftwareCategory::DEVELOPMENT_TOOLS);
 
@@ -994,7 +994,7 @@ namespace CryptoShield::Detection {
             }
         }
 
-        // Es actividad de desarrollo legÌtima si la mayorÌa de las operaciones son sobre archivos de desarrollo.
+        // Es actividad de desarrollo leg√≠tima si la mayor√≠a de las operaciones son sobre archivos de desarrollo.
         double dev_ratio = static_cast<double>(dev_file_ops) / operations.size();
 
         return dev_ratio > 0.5;

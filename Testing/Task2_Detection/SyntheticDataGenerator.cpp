@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "SyntheticDataGenerator.h"
 #include <fstream>
 #include <random>
@@ -6,14 +6,14 @@
 
 namespace CryptoShield::Testing {
 
-    // --- Implementación de Métodos Públicos ---
+    // --- ImplementaciÃ³n de MÃ©todos PÃºblicos ---
 
     void SyntheticDataGenerator::GenerateFileEncryptorBehavior(const std::wstring& target_directory, std::vector<CryptoShield::FileOperationInfo>& ops_log) {
         std::wcout << L"INFO: Generating synthetic file encryptor behavior in " << target_directory << std::endl;
 
         uint32_t ransomware_pid = 1337;
 
-        // 1. Crear un conjunto de archivos víctima
+        // 1. Crear un conjunto de archivos vÃ­ctima
         std::vector<std::wstring> extensions_to_create = { L".txt", L".docx", L".jpg", L".pdf" };
         auto files_to_encrypt = CreateTestFiles(target_directory, extensions_to_create, 5);
 
@@ -43,12 +43,12 @@ namespace CryptoShield::Testing {
 
         // 2. Simular la lectura de muchos archivos fuente
         for (const auto& file : source_files) {
-            ops_log.push_back(CreateOperation(backup_pid, file, CryptoShield::FileOperationType::Create)); // Usamos Create como análogo de Read para el test
+            ops_log.push_back(CreateOperation(backup_pid, file, CryptoShield::FileOperationType::Create)); // Usamos Create como anÃ¡logo de Read para el test
         }
 
         // 3. Simular la escritura al archivo de backup
         CreateDummyFile(backup_file, 1024 * 1024); // Crear un archivo de backup de 1MB
-        for (int i = 0; i < 10; ++i) { // Múltiples escrituras
+        for (int i = 0; i < 10; ++i) { // MÃºltiples escrituras
             ops_log.push_back(CreateOperation(backup_pid, backup_file, CryptoShield::FileOperationType::Write));
         }
     }
@@ -63,28 +63,28 @@ namespace CryptoShield::Testing {
             ops_log.push_back(CreateOperation(compiler_pid, file, CryptoShield::FileOperationType::Create)); // Simula lectura
         }
 
-        // 2. Simular creación de archivos objeto (.obj)
+        // 2. Simular creaciÃ³n de archivos objeto (.obj)
         for (int i = 0; i < 5; ++i) {
             std::wstring obj_path = project_directory + L"\\file" + std::to_wstring(i) + L".obj";
             ops_log.push_back(CreateOperation(compiler_pid, obj_path, CryptoShield::FileOperationType::Create));
             ops_log.push_back(CreateOperation(compiler_pid, obj_path, CryptoShield::FileOperationType::Write));
         }
 
-        // 3. Simular linkado y creación de ejecutable (.exe)
+        // 3. Simular linkado y creaciÃ³n de ejecutable (.exe)
         std::wstring exe_path = project_directory + L"\\program.exe";
         ops_log.push_back(CreateOperation(compiler_pid, exe_path, CryptoShield::FileOperationType::Create));
         ops_log.push_back(CreateOperation(compiler_pid, exe_path, CryptoShield::FileOperationType::Write));
     }
 
 
-    // --- Implementación de Métodos Privados ---
+    // --- ImplementaciÃ³n de MÃ©todos Privados ---
 
     /**
      * @brief Crea un conjunto de archivos de prueba en un directorio, ahora distribuidos en subdirectorios.
-     * @details Esta nueva versión crea subdirectorios para simular un ataque más realista y extendido.
-     * @param directory Directorio raíz de destino.
+     * @details Esta nueva versiÃ³n crea subdirectorios para simular un ataque mÃ¡s realista y extendido.
+     * @param directory Directorio raÃ­z de destino.
      * @param extensions Extensiones de los archivos a crear.
-     * @param files_per_extension Número de archivos a crear por cada extensión.
+     * @param files_per_extension NÃºmero de archivos a crear por cada extensiÃ³n.
      * @return Lista de rutas de los archivos creados.
      */
     std::vector<std::wstring> SyntheticDataGenerator::CreateTestFiles(const std::wstring& directory, const std::vector<std::wstring>& extensions, size_t files_per_extension) {
@@ -102,7 +102,7 @@ namespace CryptoShield::Testing {
                 // Dividimos para no crear demasiados ficheros en total.
                 for (size_t j = 0; j < files_per_extension / number_of_subdirs + 1; ++j) {
                     std::wstring file_path = sub_dir_path + L"\\testfile_" + std::to_wstring(j) + ext;
-                    CreateDummyFile(file_path, 1024 + (j * 100)); // Tamaños variados
+                    CreateDummyFile(file_path, 1024 + (j * 100)); // TamaÃ±os variados
                     created_files.push_back(file_path);
                 }
             }
@@ -111,9 +111,9 @@ namespace CryptoShield::Testing {
     }
 
     /**
-     * @brief Simula el cifrado de archivos (lectura, modificación, escritura y renombrado).
+     * @brief Simula el cifrado de archivos (lectura, modificaciÃ³n, escritura y renombrado).
      * @param files Vector de archivos a "cifrar".
-     * @param pid ID del proceso que realiza la acción.
+     * @param pid ID del proceso que realiza la acciÃ³n.
      * @param ops_log Vector para registrar las operaciones.
      */
     void SyntheticDataGenerator::EncryptTestFiles(const std::vector<std::wstring>& files, uint32_t pid, std::vector<CryptoShield::FileOperationInfo>& ops_log) {
@@ -123,7 +123,7 @@ namespace CryptoShield::Testing {
 
             std::wstring new_path = file_path + L".locked";
 
-            // Crea una operación de renombrado y establece tanto la ruta original como la nueva
+            // Crea una operaciÃ³n de renombrado y establece tanto la ruta original como la nueva
             FileOperationInfo rename_op = CreateOperation(pid, file_path, CryptoShield::FileOperationType::Rename);
             rename_op.new_file_path = new_path; // <-- Establece el nuevo campo
             ops_log.push_back(rename_op);

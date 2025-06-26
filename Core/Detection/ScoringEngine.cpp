@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ScoringEngine.cpp
  * @brief Multi-criteria scoring system implementation
  * @details Implements threat scoring with configurable weights and false positive reduction
@@ -766,7 +766,7 @@ namespace CryptoShield::Detection {
         // Contributing Factors
         explanation << std::endl << L"=== CONTRIBUTING FACTORS ===" << std::endl;
         for (const auto& factor : analysis.contributing_factors) {
-            explanation << L"� " << factor << std::endl;
+            explanation << L"• " << factor << std::endl;
         }
 
         // False Positive Analysis

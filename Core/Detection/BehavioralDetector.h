@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file BehavioralDetector.h
  * @brief Behavioral pattern detection for ransomware identification
@@ -298,7 +298,7 @@ namespace CryptoShield::Detection {
         // Add config member
         DetectionEngineConfig::BehavioralConfig config_;
 
-        // Nuevo: Cola para rastrear las marcas de tiempo de los �ltimos renombrados
+        // Nuevo: Cola para rastrear las marcas de tiempo de los últimos renombrados
         std::deque<std::chrono::steady_clock::time_point> rename_timestamps_;
     };
 

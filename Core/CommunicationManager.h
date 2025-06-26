@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>      // Incluir ANTES de otras cabeceras
@@ -213,7 +213,7 @@ namespace CryptoShield {
         ULONG thread_id;
         //WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
         std::wstring file_path;
-        std::wstring new_file_path; // <-- A�ADE ESTE CAMPO
+        std::wstring new_file_path; // <-- AÑADE ESTE CAMPO
         FILETIME timestamp;
 
         /**

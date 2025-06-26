@@ -1,10 +1,10 @@
-#pragma once
+Ôªø#pragma once
 
-// --- Encabezados Est·ndar de Windows y C++ ---
+// --- Encabezados Est√°ndar de Windows y C++ ---
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-// LibrerÌas est·ndar de C++ m·s comunes para tus tests
+// Librer√≠as est√°ndar de C++ m√°s comunes para tus tests
 #include <vector>
 #include <string>
 #include <memory>

@@ -1,4 +1,4 @@
-/**
+Ôªø/**
  * @file Communication.c
  * @brief Kernel-User communication implementation
  * @details Handles communication port callbacks and message processing for CryptoShield.
@@ -23,7 +23,7 @@ static NTSTATUS HandleConfigUpdateMessage(
 static NTSTATUS HandleShutdownRequestMessage(VOID);
 
 
-// ----- Communication Port Callbacks (nombres seg˙n documento tÈcnico) -----
+// ----- Communication Port Callbacks (nombres seg√∫n documento t√©cnico) -----
 
 /**
  * @brief Client connection notification callback (ConnectNotifyCallback)
@@ -31,10 +31,10 @@ static NTSTATUS HandleShutdownRequestMessage(VOID);
  */
 NTSTATUS ConnectNotifyCallback(
     _In_ PFLT_PORT ClientPort,
-    _In_opt_ PVOID ServerPortCookie, // No usado en esta implementaciÛn
+    _In_opt_ PVOID ServerPortCookie, // No usado en esta implementaci√≥n
     _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext, // Contexto del cliente
     _In_ ULONG SizeOfContext,
-    _Flt_ConnectionCookie_Outptr_ PVOID* ConnectionCookie // Cookie para esta conexiÛn
+    _Flt_ConnectionCookie_Outptr_ PVOID* ConnectionCookie // Cookie para esta conexi√≥n
 )
 {
     PAGED_CODE(); // Esta callback se llama en PASSIVE_LEVEL.
@@ -43,7 +43,7 @@ NTSTATUS ConnectNotifyCallback(
     
     
     if (ConnectionContext == NULL || SizeOfContext != sizeof(ULONG)) {
-        // Rechazar conexiÛn si no envÌa un PID v·lido.
+        // Rechazar conexi√≥n si no env√≠a un PID v√°lido.
         return STATUS_INVALID_PARAMETER;
     }
     g_Context.UserModeProcessId = *(PULONG)ConnectionContext;
@@ -51,12 +51,12 @@ NTSTATUS ConnectNotifyCallback(
     
     
     
-    UNREFERENCED_PARAMETER(ConnectionContext); // PodrÌa usarse para validar versiÛn del cliente, etc.
+    UNREFERENCED_PARAMETER(ConnectionContext); // Podr√≠a usarse para validar versi√≥n del cliente, etc.
     UNREFERENCED_PARAMETER(SizeOfContext);
 
     CS_LOG_INFO("User service connection request received.");
 
-    // Solo se permite un cliente a la vez (seg˙n MAX_CLIENT_CONNECTIONS = 1 en DriverEntry)
+    // Solo se permite un cliente a la vez (seg√∫n MAX_CLIENT_CONNECTIONS = 1 en DriverEntry)
     // Usar el recurso para proteger el acceso a g_Context.ClientPort y g_Context.ClientConnected
     ExEnterCriticalRegionAndAcquireResourceExclusive(&g_Context.PortResource);
 
@@ -70,10 +70,10 @@ NTSTATUS ConnectNotifyCallback(
     g_Context.ClientPort = ClientPort;
     g_Context.ClientConnected = TRUE;
 
-    // El ConnectionCookie puede ser un puntero a una estructura de contexto de conexiÛn si se necesita.
-    // Por ahora, podemos usar un valor simple o incluso el mismo ClientPort si no se necesita m·s.
-    // AquÌ, no asignaremos un cookie complejo, el driver solo soporta un cliente.
-    // Se podrÌa usar ClientPort como cookie si FltMgr lo permite o un puntero a g_Context.
+    // El ConnectionCookie puede ser un puntero a una estructura de contexto de conexi√≥n si se necesita.
+    // Por ahora, podemos usar un valor simple o incluso el mismo ClientPort si no se necesita m√°s.
+    // Aqu√≠, no asignaremos un cookie complejo, el driver solo soporta un cliente.
+    // Se podr√≠a usar ClientPort como cookie si FltMgr lo permite o un puntero a g_Context.
     *ConnectionCookie = (PVOID)ClientPort; // Ejemplo: usar el handle del puerto como cookie.
 
     ExReleaseResourceAndLeaveCriticalRegion(&g_Context.PortResource);
@@ -96,12 +96,12 @@ VOID DisconnectNotifyCallback(
 
     ExEnterCriticalRegionAndAcquireResourceExclusive(&g_Context.PortResource);
 
-    // Verificar si el cookie de conexiÛn coincide con el cliente actual (si se usara un cookie m·s complejo).
+    // Verificar si el cookie de conexi√≥n coincide con el cliente actual (si se usara un cookie m√°s complejo).
     // En este caso, como solo hay un cliente, si g_Context.ClientConnected es TRUE, es este.
     if (g_Context.ClientConnected && (PFLT_PORT)ConnectionCookie == g_Context.ClientPort) {
         g_Context.ClientConnected = FALSE;
         g_Context.ClientPort = NULL; // Liberar la referencia al puerto del cliente.
-        // FltCloseClientPort no se llama aquÌ; el Filter Manager lo maneja.
+        // FltCloseClientPort no se llama aqu√≠; el Filter Manager lo maneja.
         CS_LOG_INFO("User service disconnected successfully.");
     }
     else {
@@ -117,7 +117,7 @@ VOID DisconnectNotifyCallback(
  * @details Processes messages received from the user-mode client.
  */
 NTSTATUS MessageNotifyCallback(
-    _In_opt_ PVOID PortCookie, // El ConnectionCookie de la conexiÛn
+    _In_opt_ PVOID PortCookie, // El ConnectionCookie de la conexi√≥n
     _In_reads_bytes_opt_(InputBufferLength) PVOID InputBuffer,
     _In_ ULONG InputBufferLength,
     _Out_writes_bytes_to_opt_(OutputBufferLength, *ReturnOutputBufferLength) PVOID OutputBuffer,
@@ -128,7 +128,7 @@ NTSTATUS MessageNotifyCallback(
     NTSTATUS status = STATUS_SUCCESS;
     PCS_MESSAGE_PAYLOAD_HEADER payloadHeader = NULL; // De Shared.h
 
-    UNREFERENCED_PARAMETER(PortCookie); // PodrÌa usarse para identificar al cliente si hay m˙ltiples.
+    UNREFERENCED_PARAMETER(PortCookie); // Podr√≠a usarse para identificar al cliente si hay m√∫ltiples.
 
     PAGED_CODE(); // Esta callback se llama en el contexto del hilo del cliente, en PASSIVE_LEVEL.
 
@@ -147,13 +147,13 @@ NTSTATUS MessageNotifyCallback(
 
     payloadHeader = (PCS_MESSAGE_PAYLOAD_HEADER)InputBuffer;
 
-    // Validar que el tamaÒo del buffer de entrada coincida con el tamaÒo indicado en el payload.
+    // Validar que el tama√±o del buffer de entrada coincida con el tama√±o indicado en el payload.
     if (InputBufferLength < payloadHeader->PayloadSize) {
         CS_LOG_ERROR("InputBufferLength (%u) is less than PayloadSize in header (%u).",
             InputBufferLength, payloadHeader->PayloadSize);
         return STATUS_BUFFER_TOO_SMALL; // O STATUS_INFO_LENGTH_MISMATCH
     }
-    // TambiÈn es buena idea limitar el PayloadSize m·ximo para evitar DoS.
+    // Tambi√©n es buena idea limitar el PayloadSize m√°ximo para evitar DoS.
     // if (payloadHeader->PayloadSize > MAX_EXPECTED_PAYLOAD_SIZE) return STATUS_INVALID_PARAMETER;
 
 
@@ -161,7 +161,7 @@ NTSTATUS MessageNotifyCallback(
         payloadHeader->MessageType, payloadHeader->MessageId, payloadHeader->PayloadSize);
     InterlockedIncrement64(&g_Context.MessagesReceivedFromUserMode);
 
-    // Procesar el mensaje seg˙n su tipo (definido en Shared.h)
+    // Procesar el mensaje seg√∫n su tipo (definido en Shared.h)
     switch (payloadHeader->MessageType) {
     case MSG_TYPE_STATUS_REQUEST:
         // El payload de entrada para StatusRequest es solo la cabecera.
@@ -170,7 +170,7 @@ NTSTATUS MessageNotifyCallback(
         break;
 
     case MSG_TYPE_CONFIG_UPDATE:
-        // Verificar que el payload sea del tamaÒo esperado para CS_CONFIG_UPDATE_PAYLOAD.
+        // Verificar que el payload sea del tama√±o esperado para CS_CONFIG_UPDATE_PAYLOAD.
         if (payloadHeader->PayloadSize < sizeof(CS_CONFIG_UPDATE_PAYLOAD)) {
             CS_LOG_ERROR("PayloadSize (%u) for MSG_TYPE_CONFIG_UPDATE is too small (expected %u).",
                 payloadHeader->PayloadSize, (ULONG)sizeof(CS_CONFIG_UPDATE_PAYLOAD));
@@ -178,12 +178,12 @@ NTSTATUS MessageNotifyCallback(
         }
         else {
             status = HandleConfigUpdateMessage(
-                (PCS_CONFIG_UPDATE_PAYLOAD)InputBuffer, // Castear al tipo especÌfico
+                (PCS_CONFIG_UPDATE_PAYLOAD)InputBuffer, // Castear al tipo espec√≠fico
                 payloadHeader->PayloadSize
             );
-            // Opcionalmente, enviar una respuesta de confirmaciÛn en OutputBuffer.
+            // Opcionalmente, enviar una respuesta de confirmaci√≥n en OutputBuffer.
             // Por ahora, se asume que la respuesta es solo el NTSTATUS.
-            // Si se envÌa payload de respuesta, actualizar *ReturnOutputBufferLength.
+            // Si se env√≠a payload de respuesta, actualizar *ReturnOutputBufferLength.
         }
         break;
 
@@ -193,8 +193,8 @@ NTSTATUS MessageNotifyCallback(
         // No se espera payload de respuesta.
         break;
 
-        // Otros tipos de mensajes del cliente al kernel podrÌan manejarse aquÌ.
-        // Por ejemplo, si el cliente envÌa una respuesta a una alerta que el kernel enviÛ.
+        // Otros tipos de mensajes del cliente al kernel podr√≠an manejarse aqu√≠.
+        // Por ejemplo, si el cliente env√≠a una respuesta a una alerta que el kernel envi√≥.
 
     default:
         CS_LOG_WARNING("Unknown message type received from user service: %u", payloadHeader->MessageType);
@@ -206,7 +206,7 @@ NTSTATUS MessageNotifyCallback(
 }
 
 
-// ----- Funciones de Manejo de Mensajes EspecÌficos -----
+// ----- Funciones de Manejo de Mensajes Espec√≠ficos -----
 
 static NTSTATUS HandleStatusRequestMessage(
     _Out_writes_bytes_to_(OutputBufferLength, *ActualOutputLength) PVOID OutputBuffer,
@@ -230,7 +230,7 @@ static NTSTATUS HandleStatusRequestMessage(
     RtlZeroMemory(statusReply, sizeof(CS_STATUS_REPLY_PAYLOAD));
 
     // 3. Rellenar la cabecera. ESTA ES LA PARTE CLAVE.
-    // Nos aseguramos de que el tamaÒo sea el correcto de la estructura completa.
+    // Nos aseguramos de que el tama√±o sea el correcto de la estructura completa.
     statusReply->Header.MessageType = MSG_TYPE_STATUS_REQUEST;
     statusReply->Header.MessageId = 0;
     statusReply->Header.PayloadSize = sizeof(CS_STATUS_REPLY_PAYLOAD);
@@ -254,7 +254,7 @@ static NTSTATUS HandleStatusRequestMessage(
     statusReply->KernelMessagesReceived = g_Context.MessagesReceivedFromUserMode;
     KeReleaseSpinLock(&g_Context.StatisticsLock, oldIrqlStats);
 
-    // 5. Indicar al sistema el tamaÒo exacto de la respuesta que hemos escrito.
+    // 5. Indicar al sistema el tama√±o exacto de la respuesta que hemos escrito.
     *ActualOutputLength = sizeof(CS_STATUS_REPLY_PAYLOAD);
 
     return STATUS_SUCCESS;
@@ -264,7 +264,7 @@ static NTSTATUS HandleStatusRequestMessage(
 
 static NTSTATUS HandleConfigUpdateMessage(
     _In_ PCS_CONFIG_UPDATE_PAYLOAD ConfigUpdatePayload, // De Shared.h
-    _In_ ULONG PayloadLength // TamaÒo del payload recibido
+    _In_ ULONG PayloadLength // Tama√±o del payload recibido
 )
 {
     KIRQL oldIrql;
@@ -273,16 +273,16 @@ static NTSTATUS HandleConfigUpdateMessage(
     UNREFERENCED_PARAMETER(PayloadLength); // Ya validado parcialmente por el llamador.
     PAGED_CODE();
 
-    // Validar los nuevos valores de configuraciÛn
+    // Validar los nuevos valores de configuraci√≥n
     if (ConfigUpdatePayload->NewDetectionSensitivity > MAX_DETECTION_SENSITIVITY) {
         CS_LOG_WARNING("Invalid new detection sensitivity received: %u", ConfigUpdatePayload->NewDetectionSensitivity);
-        return STATUS_INVALID_PARAMETER_2; // O un error m·s especÌfico
+        return STATUS_INVALID_PARAMETER_2; // O un error m√°s espec√≠fico
     }
-    // Se podrÌan validar otros flags y acciones aquÌ.
+    // Se podr√≠an validar otros flags y acciones aqu√≠.
 
     newMonitoringEnabled = (ConfigUpdatePayload->NewConfigFlags & CONFIG_FLAG_MONITORING_ENABLED) ? TRUE : FALSE;
 
-    // Actualizar la configuraciÛn global del driver (protegida por spinlock)
+    // Actualizar la configuraci√≥n global del driver (protegida por spinlock)
     KeAcquireSpinLock(&g_Context.ConfigLock, &oldIrql);
     g_Context.MonitoringEnabled = newMonitoringEnabled;
     g_Context.DetectionSensitivity = ConfigUpdatePayload->NewDetectionSensitivity;
@@ -305,30 +305,30 @@ static NTSTATUS HandleShutdownRequestMessage(VOID)
     CS_LOG_INFO("Shutdown request received from user service.");
 
     // Preparar para la descarga: deshabilitar el monitoreo.
-    // El FilterUnloadCallback se encargar· de la limpieza final.
+    // El FilterUnloadCallback se encargar√° de la limpieza final.
     KeAcquireSpinLockAtDpcLevel(&g_Context.ConfigLock); // Usar ConfigLock para proteger MonitoringEnabled
     g_Context.MonitoringEnabled = FALSE;
-    // TambiÈn se podrÌa establecer g_Context.ActiveConfigFlags &= ~CONFIG_FLAG_MONITORING_ENABLED;
+    // Tambi√©n se podr√≠a establecer g_Context.ActiveConfigFlags &= ~CONFIG_FLAG_MONITORING_ENABLED;
     KeReleaseSpinLockFromDpcLevel(&g_Context.ConfigLock);
 
     CS_LOG_INFO("Monitoring disabled due to shutdown request.");
 
-    // No se puede iniciar la descarga del driver desde aquÌ.
-    // El servicio de usuario tendrÌa que coordinar la detenciÛn del servicio y la descarga del driver.
+    // No se puede iniciar la descarga del driver desde aqu√≠.
+    // El servicio de usuario tendr√≠a que coordinar la detenci√≥n del servicio y la descarga del driver.
     return STATUS_SUCCESS;
 }
 
 
-// ----- FunciÛn para Enviar Mensajes al Servicio de Usuario -----
+// ----- Funci√≥n para Enviar Mensajes al Servicio de Usuario -----
 /**
  * @brief Sends a message (payload) to the connected user-mode service.
- * Esta funciÛn se encarga de la FILTER_MESSAGE_HEADER si se espera una respuesta.
+ * Esta funci√≥n se encarga de la FILTER_MESSAGE_HEADER si se espera una respuesta.
  */
 NTSTATUS SendMessageToUserService(
     _In_ PCS_MESSAGE_PAYLOAD_HEADER PayloadHeader, // Puntero al payload (debe ser un tipo de Shared.h)
-    _In_ ULONG PayloadSize,                        // TamaÒo del payload
+    _In_ ULONG PayloadSize,                        // Tama√±o del payload
     _Out_opt_ PVOID ReplyBuffer,                   // Buffer para la respuesta del servicio (debe ser KERNEL_EXPECTED_USER_REPLY o similar)
-    _Inout_opt_ PULONG ReplyLength                 // TamaÒo del buffer de respuesta / tamaÒo devuelto
+    _Inout_opt_ PULONG ReplyLength                 // Tama√±o del buffer de respuesta / tama√±o devuelto
 )
 {
     NTSTATUS status;
@@ -345,8 +345,8 @@ NTSTATUS SendMessageToUserService(
         return STATUS_INVALID_PARAMETER;
     }
 
-    // Si se espera una respuesta, el buffer que se envÌa a FltSendMessage DEBE
-    // comenzar con una FILTER_MESSAGE_HEADER. El payload sigue despuÈs.
+    // Si se espera una respuesta, el buffer que se env√≠a a FltSendMessage DEBE
+    // comenzar con una FILTER_MESSAGE_HEADER. El payload sigue despu√©s.
     if (ReplyBuffer != NULL && ReplyLength != NULL && *ReplyLength > 0) {
         messageToSendSize = sizeof(FILTER_MESSAGE_HEADER) + PayloadSize;
         messageToSendBuffer = CS_ALLOCATE_POOL(POOL_FLAG_NON_PAGED, messageToSendSize); // O PagedPool si el contenido lo permite
@@ -355,36 +355,36 @@ NTSTATUS SendMessageToUserService(
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         // La FILTER_MESSAGE_HEADER (ReplyLength, MessageId) es inicializada por FltSendMessage.
-        // Solo necesitamos copiar el payload despuÈs de ella.
+        // Solo necesitamos copiar el payload despu√©s de ella.
         RtlCopyMemory((PUCHAR)messageToSendBuffer + sizeof(FILTER_MESSAGE_HEADER), PayloadHeader, PayloadSize);
     }
     else {
         // Si no se espera respuesta, se puede enviar el payload directamente.
-        // (Aunque FltSendMessage a˙n podrÌa requerir la cabecera si ciertos par·metros no son NULL).
-        // Para ser consistentes y m·s seguros, siempre podrÌamos incluir FILTER_MESSAGE_HEADER.
-        // O, si es una notificaciÛn pura sin respuesta, se podrÌa intentar enviar solo el payload.
+        // (Aunque FltSendMessage a√∫n podr√≠a requerir la cabecera si ciertos par√°metros no son NULL).
+        // Para ser consistentes y m√°s seguros, siempre podr√≠amos incluir FILTER_MESSAGE_HEADER.
+        // O, si es una notificaci√≥n pura sin respuesta, se podr√≠a intentar enviar solo el payload.
         // Por ahora, asumiremos que si no hay ReplyBuffer, enviamos solo el payload.
-        // °CUIDADO! La documentaciÛn de FltSendMessage es especÌfica:
+        // ¬°CUIDADO! La documentaci√≥n de FltSendMessage es espec√≠fica:
         // "If ReplyBuffer is NULL, SenderBuffer does not need to begin with a FILTER_MESSAGE_HEADER structure."
         // "If ReplyBuffer is not NULL, SenderBuffer must begin with a FILTER_MESSAGE_HEADER structure."
         messageToSendBuffer = (PVOID)PayloadHeader; // Enviar el payload directamente
         messageToSendSize = PayloadSize;
     }
 
-    // Establecer un timeout para el envÌo del mensaje (ej. 500 ms)
+    // Establecer un timeout para el env√≠o del mensaje (ej. 500 ms)
     timeout.QuadPart = -(500LL * 10000LL); // 500 ms en unidades de 100ns, negativo para tiempo relativo
 
     status = FltSendMessage(
         g_Context.FilterHandle,
         &g_Context.ClientPort,      // Puntero al handle del puerto del cliente
         messageToSendBuffer,        // Buffer a enviar (con o sin FILTER_MESSAGE_HEADER)
-        messageToSendSize,          // TamaÒo del buffer a enviar
+        messageToSendSize,          // Tama√±o del buffer a enviar
         ReplyBuffer,                // Buffer para recibir la respuesta (si hay)
-        ReplyLength,                // Puntero al tamaÒo del buffer de respuesta / tamaÒo real
-        &timeout                    // Timeout para la operaciÛn
+        ReplyLength,                // Puntero al tama√±o del buffer de respuesta / tama√±o real
+        &timeout                    // Timeout para la operaci√≥n
     );
 
-    // Si se asignÛ un buffer intermedio para incluir FILTER_MESSAGE_HEADER, liberarlo.
+    // Si se asign√≥ un buffer intermedio para incluir FILTER_MESSAGE_HEADER, liberarlo.
     if (ReplyBuffer != NULL && messageToSendBuffer != PayloadHeader) {
         CS_FREE_POOL(messageToSendBuffer);
     }
@@ -403,11 +403,11 @@ NTSTATUS SendMessageToUserService(
         else if (status == STATUS_PORT_DISCONNECTED) {
             CS_LOG_WARNING("User service port disconnected while sending message (type %u).", PayloadHeader->MessageType);
             // Marcar como desconectado si FltSendMessage lo indica.
-            // DisconnectNotifyCallback deberÌa manejar la limpieza final de g_Context.ClientPort.
+            // DisconnectNotifyCallback deber√≠a manejar la limpieza final de g_Context.ClientPort.
             ExEnterCriticalRegionAndAcquireResourceExclusive(&g_Context.PortResource);
             if (g_Context.ClientConnected) { // Solo si no se ha desconectado ya
                 g_Context.ClientConnected = FALSE;
-                // g_Context.ClientPort = NULL; // No hacer NULL aquÌ directamente, DisconnectNotifyCallback lo har·.
+                // g_Context.ClientPort = NULL; // No hacer NULL aqu√≠ directamente, DisconnectNotifyCallback lo har√°.
                                                 // FltCloseClientPort lo hace el Filter Manager.
             }
             ExReleaseResourceAndLeaveCriticalRegion(&g_Context.PortResource);

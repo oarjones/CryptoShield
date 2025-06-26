@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include <nlohmann/json.hpp>
 
 
@@ -13,7 +13,7 @@
 
 // --- INICIO DE NUEVOS TESTS ---
 
-// Suite de tests para el Analizador de Entropía
+// Suite de tests para el Analizador de EntropÃ­a
 class EntropyAnalysisTests : public ::testing::Test {
 protected:
     std::unique_ptr<CryptoShield::Detection::AdvancedEntropyAnalysis> analyzer;
@@ -44,28 +44,28 @@ protected:
 };
 
 TEST_F(EntropyAnalysisTests, TestShannonEntropyCalculation) {
-    // La entropía de datos con un solo byte debe ser 0
+    // La entropÃ­a de datos con un solo byte debe ser 0
     auto zeros = GenerateData(1024, 0);
     ASSERT_NEAR(analyzer->PerformComprehensiveAnalysis(zeros, CryptoShield::Detection::FileType::UNKNOWN).shannon_entropy, 0.0, 0.01);
 
-    // La entropía de una secuencia simple de 2 bytes (0.5 prob cada uno) debe ser 1.0
+    // La entropÃ­a de una secuencia simple de 2 bytes (0.5 prob cada uno) debe ser 1.0
     auto simple_seq = GenerateData(1024, 1);
     ASSERT_NEAR(analyzer->PerformComprehensiveAnalysis(simple_seq, CryptoShield::Detection::FileType::UNKNOWN).shannon_entropy, 1.0, 0.01);
 
-    // La entropía de datos aleatorios debe ser alta (cercana a 8.0)
+    // La entropÃ­a de datos aleatorios debe ser alta (cercana a 8.0)
     auto random_data = GenerateData(4096, 2);
     ASSERT_GT(analyzer->PerformComprehensiveAnalysis(random_data, CryptoShield::Detection::FileType::UNKNOWN).shannon_entropy, 7.85);
 }
 
 TEST_F(EntropyAnalysisTests, TestEntropyThresholds) {
-    // Simula un archivo de texto con baja entropía
+    // Simula un archivo de texto con baja entropÃ­a
     std::string text_str = "This is a typical sentence found in a document. It has low entropy.";
     std::vector<uint8_t> text_data(text_str.begin(), text_str.end());
     auto text_result = analyzer->PerformComprehensiveAnalysis(text_data, CryptoShield::Detection::FileType::TEXT_DOCUMENT);
     ASSERT_FALSE(text_result.is_high_entropy);
     ASSERT_LT(text_result.shannon_entropy, analyzer->GetAdaptiveThreshold(CryptoShield::Detection::FileType::TEXT_DOCUMENT));
 
-    // Simula un archivo comprimido/cifrado con alta entropía
+    // Simula un archivo comprimido/cifrado con alta entropÃ­a
     auto random_data = GenerateData(4096, 2);
     auto encrypted_result = analyzer->PerformComprehensiveAnalysis(random_data, CryptoShield::Detection::FileType::COMPRESSED);
     ASSERT_TRUE(encrypted_result.is_high_entropy);
@@ -73,7 +73,7 @@ TEST_F(EntropyAnalysisTests, TestEntropyThresholds) {
 }
 
 TEST_F(EntropyAnalysisTests, TestChiSquareAnalysis) {
-    // Datos aleatorios deben tener una distribución uniforme (Chi-Square bajo)
+    // Datos aleatorios deben tener una distribuciÃ³n uniforme (Chi-Square bajo)
     auto random_data = GenerateData(8192, 2);
     auto random_result = analyzer->PerformComprehensiveAnalysis(random_data, CryptoShield::Detection::FileType::UNKNOWN);
     ASSERT_TRUE(random_result.is_random_distribution) << "Chi-Square value was: " << random_result.chi_square_value;
@@ -87,7 +87,7 @@ TEST_F(EntropyAnalysisTests, TestChiSquareAnalysis) {
 }
 
 
-// Suite de tests para Detección por Comportamiento
+// Suite de tests para DetecciÃ³n por Comportamiento
 class BehavioralPatternTests : public ::testing::Test {
 protected:
     std::unique_ptr<CryptoShield::Detection::BehavioralDetector> detector;
@@ -97,7 +97,7 @@ protected:
      * @brief Loads the real configuration from the file before each test.
      */
     void SetUp() override {
-        // Cargar la configuración real desde el fichero JSON
+        // Cargar la configuraciÃ³n real desde el fichero JSON
         auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
         const std::wstring config_path = L"..\\..\\..\\Common\\detection_config.json";
 
@@ -107,7 +107,7 @@ protected:
 
         config = config_manager->GetConfiguration();
 
-        // Inicializar el detector con la configuración cargada
+        // Inicializar el detector con la configuraciÃ³n cargada
         detector = std::make_unique<CryptoShield::Detection::BehavioralDetector>(config.behavioral);
     }
 
@@ -134,7 +134,7 @@ TEST_F(BehavioralPatternTests, TestMassFileModificationDetection) {
         result = detector->AnalyzeOperation(CreateOperation(suspicious_pid, path, CryptoShield::FileOperationType::Write));
     }
 
-    // Debería ser detectado como sospechoso después de suficientes operaciones
+    // DeberÃ­a ser detectado como sospechoso despuÃ©s de suficientes operaciones
     ASSERT_TRUE(result.is_suspicious);
     ASSERT_GT(result.confidence_score, config.behavioral.suspicion_score_threshold);
     ASSERT_EQ(result.operations_count, op_count);
@@ -161,18 +161,18 @@ TEST_F(BehavioralPatternTests, TestFileExtensionChangeDetection) {
     // Usamos el subcomponente directamente para este test
     auto extension_monitor = std::make_unique<CryptoShield::Detection::FileExtensionMonitor>(config.behavioral);
 
-    // Escenario 1: Cambio a extensión sospechosa
+    // Escenario 1: Cambio a extensiÃ³n sospechosa
     auto suspicious_change = extension_monitor->AnalyzeFileRename(L"C:\\image.jpg", L"C:\\image.jpg.locked", pid);
     ASSERT_TRUE(suspicious_change.is_suspicious);
     ASSERT_GT(suspicious_change.suspicion_score, 0.8);
     ASSERT_EQ(suspicious_change.new_extension, L".locked");
 
-    // Escenario 2: Cambio a extensión benigna
+    // Escenario 2: Cambio a extensiÃ³n benigna
     auto benign_change = extension_monitor->AnalyzeFileRename(L"C:\\document.tmp", L"C:\\document.docx", pid);
     ASSERT_FALSE(benign_change.is_suspicious);
     ASSERT_EQ(benign_change.new_extension, L".docx");
 
-    // Escenario 3: Cambio que coincide con un patrón regex sospechoso
+    // Escenario 3: Cambio que coincide con un patrÃ³n regex sospechoso
     auto regex_change = extension_monitor->AnalyzeFileRename(L"C:\\file.data", L"C:\\file.data.id-1234ABCD.user@domain.com", pid);
     ASSERT_TRUE(regex_change.is_suspicious);
     ASSERT_GT(regex_change.suspicion_score, 0.7);
@@ -187,7 +187,7 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupActivity) {
     for (int i = 0; i < 100; ++i) {
         operations.push_back(CreateOperation(backup_pid, L"C:\\Users\\User\\Photos\\image" + std::to_wstring(i) + L".jpg", CryptoShield::FileOperationType::Create));
     }
-    // Simula la escritura a un único archivo de backup
+    // Simula la escritura a un Ãºnico archivo de backup
     for (int i = 0; i < 20; ++i) {
         operations.push_back(CreateOperation(backup_pid, L"D:\\Backups\\MyBackup.zip", CryptoShield::FileOperationType::Write));
     }
@@ -197,16 +197,16 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupActivity) {
         result = detector->AnalyzeOperation(op);
     }
 
-    // Aunque hay muchas operaciones, el patrón no debería ser clasificado como ransomware
-    // Nota: Este test es más complejo y su éxito depende de la implementación del FalsePositiveMinimizer
-    // Por ahora, comprobamos que no alcance el umbral más alto de sospecha.
+    // Aunque hay muchas operaciones, el patrÃ³n no deberÃ­a ser clasificado como ransomware
+    // Nota: Este test es mÃ¡s complejo y su Ã©xito depende de la implementaciÃ³n del FalsePositiveMinimizer
+    // Por ahora, comprobamos que no alcance el umbral mÃ¡s alto de sospecha.
     ASSERT_LT(result.confidence_score, 0.9);
 }
 
 
-// --- Nuevo Test usando el Generador Sintético ---
+// --- Nuevo Test usando el Generador SintÃ©tico ---
 //TEST_F(BehavioralPatternTests, SimulateRansomwareEncryptorBehavior) {
-//    // 1. Preparación del escenario
+//    // 1. PreparaciÃ³n del escenario
 //    CryptoShield::Testing::SyntheticDataGenerator generator;
 //    std::vector<CryptoShield::FileOperationInfo> ransomware_ops;
 //    const std::wstring test_dir = L".\\temp_ransomware_test";
@@ -220,13 +220,13 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupActivity) {
 //    // Generar el comportamiento de un ataque de ransomware
 //    generator.GenerateFileEncryptorBehavior(test_dir, ransomware_ops);
 //
-//    // 2. Ejecución del test
+//    // 2. EjecuciÃ³n del test
 //    CryptoShield::Detection::BehavioralAnalysisResult final_result;
 //    for (const auto& op : ransomware_ops) {
 //        final_result = detector->AnalyzeOperation(op);
 //    }
 //
-//    // 3. Aserciones (Verificación)
+//    // 3. Aserciones (VerificaciÃ³n)
 //    // El comportamiento simulado DEBE ser detectado como altamente sospechoso
 //    ASSERT_TRUE(final_result.is_suspicious);
 //    ASSERT_GT(final_result.confidence_score, 0.8) << "The confidence score should be high for a full ransomware simulation.";
@@ -238,7 +238,7 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupActivity) {
 //}
 
 TEST_F(BehavioralPatternTests, SimulateRansomwareEncryptorBehavior) {
-    // 1. Preparación del escenario
+    // 1. PreparaciÃ³n del escenario
     CryptoShield::Testing::SyntheticDataGenerator generator;
     std::vector<CryptoShield::FileOperationInfo> ransomware_ops;
     const std::wstring test_dir = L".\\temp_ransomware_test";
@@ -250,28 +250,28 @@ TEST_F(BehavioralPatternTests, SimulateRansomwareEncryptorBehavior) {
 
     generator.GenerateFileEncryptorBehavior(test_dir, ransomware_ops);
 
-    // 2. Ejecución del test y Verificación
+    // 2. EjecuciÃ³n del test y VerificaciÃ³n
     CryptoShield::Detection::BehavioralAnalysisResult final_result;
-    bool detection_triggered = false; // Flag para rastrear si la detección se disparó
+    bool detection_triggered = false; // Flag para rastrear si la detecciÃ³n se disparÃ³
 
     for (const auto& op : ransomware_ops) {
         final_result = detector->AnalyzeOperation(op);
         if (final_result.is_suspicious) {
             detection_triggered = true;
             // Una vez que se detecta, podemos dejar de procesar el resto
-            // de operaciones para hacer el test más eficiente.
+            // de operaciones para hacer el test mÃ¡s eficiente.
             break;
         }
     }
 
-    // 3. Aserción Final
-    // La aserción ahora comprueba si la detección se disparó en CUALQUIER punto del ataque.
-    ASSERT_TRUE(detection_triggered) << "El detector no marcó el comportamiento como sospechoso en ningún momento de la simulación.";
+    // 3. AserciÃ³n Final
+    // La aserciÃ³n ahora comprueba si la detecciÃ³n se disparÃ³ en CUALQUIER punto del ataque.
+    ASSERT_TRUE(detection_triggered) << "El detector no marcÃ³ el comportamiento como sospechoso en ningÃºn momento de la simulaciÃ³n.";
 
-    // Opcional: Podemos añadir aserciones sobre el 'final_result' en el momento de la detección
+    // Opcional: Podemos aÃ±adir aserciones sobre el 'final_result' en el momento de la detecciÃ³n
     if (detection_triggered) {
         ASSERT_GT(final_result.confidence_score, config.behavioral.suspicion_score_threshold)
-            << "La puntuación de confianza debería superar el umbral en el momento de la detección.";
+            << "La puntuaciÃ³n de confianza deberÃ­a superar el umbral en el momento de la detecciÃ³n.";
     }
 
     // Limpieza
@@ -280,7 +280,7 @@ TEST_F(BehavioralPatternTests, SimulateRansomwareEncryptorBehavior) {
 
 
 TEST_F(BehavioralPatternTests, SimulateLegitimateBackupFPTest) {
-    // 1. Preparación del escenario
+    // 1. PreparaciÃ³n del escenario
     CryptoShield::Testing::SyntheticDataGenerator generator;
     std::vector<CryptoShield::FileOperationInfo> backup_ops;
     const std::wstring source_dir = L".\\temp_backup_source";
@@ -293,15 +293,15 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupFPTest) {
     // Generar comportamiento de software de backup
     generator.GenerateBackupSoftwareBehavior(source_dir, backup_file, backup_ops);
 
-    // 2. Ejecución
+    // 2. EjecuciÃ³n
     CryptoShield::Detection::BehavioralAnalysisResult final_result;
     for (const auto& op : backup_ops) {
         final_result = detector->AnalyzeOperation(op);
     }
 
-    // 3. Aserción
-    // A pesar del alto número de operaciones, esto NO debería ser marcado como sospechoso
-    // gracias al FalsePositiveMinimizer (que se probaría aquí implícitamente).
+    // 3. AserciÃ³n
+    // A pesar del alto nÃºmero de operaciones, esto NO deberÃ­a ser marcado como sospechoso
+    // gracias al FalsePositiveMinimizer (que se probarÃ­a aquÃ­ implÃ­citamente).
     ASSERT_FALSE(final_result.is_suspicious);
     ASSERT_LT(final_result.confidence_score, config.behavioral.suspicion_score_threshold);
 
@@ -312,7 +312,7 @@ TEST_F(BehavioralPatternTests, SimulateLegitimateBackupFPTest) {
 
 
 
-// --- INICIO DE LA CORRECCIÓN: Reemplazar la suite de tests ConfigLoadingTests ---
+// --- INICIO DE LA CORRECCIÃ“N: Reemplazar la suite de tests ConfigLoadingTests ---
 
 /**
  * @brief Test fixture for configuration loading tests.
@@ -334,17 +334,17 @@ TEST_F(ConfigLoadingTests, CorrectlyLoadsValuesFromRealFile) {
     auto config_manager = std::make_unique<CryptoShield::Detection::DetectionConfigManager>();
 
     // Act
-    // Comprobamos primero que el fichero de configuración existe en la ruta esperada.
+    // Comprobamos primero que el fichero de configuraciÃ³n existe en la ruta esperada.
     ASSERT_TRUE(std::filesystem::exists(config_path_))
-        << "El archivo detection_config.json no se encontró en la ruta esperada: "
+        << "El archivo detection_config.json no se encontrÃ³ en la ruta esperada: "
         << config_path_;
 
     bool load_success = config_manager->LoadConfiguration(config_path_);
 
     // Assert
-    ASSERT_TRUE(load_success) << "LoadConfiguration falló. Revisa la salida de la consola para ver errores de parseo de JSON.";
+    ASSERT_TRUE(load_success) << "LoadConfiguration fallÃ³. Revisa la salida de la consola para ver errores de parseo de JSON.";
 
-    // Obtener la configuración cargada y verificar los valores contra el fichero real
+    // Obtener la configuraciÃ³n cargada y verificar los valores contra el fichero real
     CryptoShield::Detection::DetectionEngineConfig loaded_config = config_manager->GetConfiguration();
 
     // Verificar valores clave de diferentes tipos para asegurar que el parseo es correcto
@@ -354,8 +354,8 @@ TEST_F(ConfigLoadingTests, CorrectlyLoadsValuesFromRealFile) {
     EXPECT_EQ(loaded_config.false_positive.trusted_backup_software.size(), 3);
     EXPECT_EQ(loaded_config.false_positive.trusted_backup_software[0], L"Acronis");
 
-    // Verificar un patrón regex para asegurar que se cargan correctamente
+    // Verificar un patrÃ³n regex para asegurar que se cargan correctamente
     ASSERT_FALSE(loaded_config.behavioral.suspicious_patterns_regex.empty());
     EXPECT_EQ(loaded_config.behavioral.suspicious_patterns_regex[0], L".*\\.id-[0-9A-F]{8}\\.[a-z]+@[a-z]+\\.[a-z]+$");
 }
-// --- FIN DE LA CORRECCIÓN ---
+// --- FIN DE LA CORRECCIÃ“N ---

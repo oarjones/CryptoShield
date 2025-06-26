@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file ScoringEngine.h
  * @brief Multi-criteria scoring system for threat level determination

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file MessageProcessor.cpp
  * @brief Message processing and analysis implementation
  * @details Processes file operation messages and detects suspicious patterns

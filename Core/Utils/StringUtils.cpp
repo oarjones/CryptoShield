@@ -1,4 +1,4 @@
-#include "StringUtils.h"
+Ôªø#include "StringUtils.h"
 #include <windows.h>
 #include <locale>
 #include <codecvt>
@@ -18,15 +18,15 @@ namespace CryptoShield::Utils {
 
     //std::wstring to_wstring_utf8(const std::string& str)
     //{
-    //    // std::wstring_convert est· deprecado en C++17 pero es muy conveniente.
-    //    // Si tu compilador lo soporta y no tienes restricciones, es una opciÛn f·cil.
-    //    // Si no, se puede usar MultiByteToWideChar, que es la contraparte de la otra funciÛn.
+    //    // std::wstring_convert est√° deprecado en C++17 pero es muy conveniente.
+    //    // Si tu compilador lo soporta y no tienes restricciones, es una opci√≥n f√°cil.
+    //    // Si no, se puede usar MultiByteToWideChar, que es la contraparte de la otra funci√≥n.
     //    try {
     //        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     //        return converter.from_bytes(str);
     //    }
     //    catch (const std::range_error&) {
-    //        // Manejar un posible error si la conversiÛn falla.
+    //        // Manejar un posible error si la conversi√≥n falla.
     //        return L"";
     //    }
     //}

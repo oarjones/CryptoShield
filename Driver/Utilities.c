@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * @file Utilities.c
  * @brief Utility functions for CryptoShield driver
  * @details Common helper functions for string manipulation, memory, and time.
@@ -9,13 +9,13 @@
 #include "CryptoShield.h" // Incluye Shared.h y ntstrsafe.h
 
  // Nota: FltFindUnicodeSubstring se ha trasladado a CryptoShield.h para su prototipo
- // y su implementación puede permanecer aquí o moverse a otro archivo si es muy genérica.
- // La implementación de FltFindUnicodeSubstring del código original es razonable.
+ // y su implementaciÃ³n puede permanecer aquÃ­ o moverse a otro archivo si es muy genÃ©rica.
+ // La implementaciÃ³n de FltFindUnicodeSubstring del cÃ³digo original es razonable.
 
- // ----- Implementación de FltFindUnicodeSubstring (si se mantiene aquí) -----
- // (La implementación de FltFindUnicodeSubstring del código original se puede mantener aquí)
+ // ----- ImplementaciÃ³n de FltFindUnicodeSubstring (si se mantiene aquÃ­) -----
+ // (La implementaciÃ³n de FltFindUnicodeSubstring del cÃ³digo original se puede mantener aquÃ­)
  // Ejemplo:
-BOOLEAN FltFindUnicodeSubstring_Implemented( // Renombrar si el prototipo está en otro sitio y se quiere mantener aquí
+BOOLEAN FltFindUnicodeSubstring_Implemented( // Renombrar si el prototipo estÃ¡ en otro sitio y se quiere mantener aquÃ­
     _In_ PCUNICODE_STRING String,
     _In_ PCWSTR SubStringText, // Renombrado para claridad
     _In_ BOOLEAN CaseInsensitive
@@ -29,10 +29,10 @@ BOOLEAN FltFindUnicodeSubstring_Implemented( // Renombrar si el prototipo está e
     if (String == NULL || String->Buffer == NULL || SubStringText == NULL) {
         return FALSE;
     }
-    if (String->Length == 0) { // No se puede encontrar nada en una cadena vacía
-        return (*SubStringText == L'\0'); // A menos que la subcadena también esté vacía
+    if (String->Length == 0) { // No se puede encontrar nada en una cadena vacÃ­a
+        return (*SubStringText == L'\0'); // A menos que la subcadena tambiÃ©n estÃ© vacÃ­a
     }
-    if (*SubStringText == L'\0') { // Subcadena vacía se considera encontrada (o no, según definición)
+    if (*SubStringText == L'\0') { // Subcadena vacÃ­a se considera encontrada (o no, segÃºn definiciÃ³n)
         return TRUE;
     }
 
@@ -41,15 +41,15 @@ BOOLEAN FltFindUnicodeSubstring_Implemented( // Renombrar si el prototipo está e
     if (subStringUnicode.Length > String->Length) return FALSE;
 
 
-    // RtlFindUnicodeSubstring es una función de WDK que hace esto.
+    // RtlFindUnicodeSubstring es una funciÃ³n de WDK que hace esto.
     // Necesita ser llamada en PASSIVE_LEVEL.
     // BOOLEAN RtlFindUnicodeSubstring(     // Esta no existe, es de user mode o Ntdll
     //    IN PUNICODE_STRING FullString,
     //    IN PUNICODE_STRING SearchString,
     //    IN BOOLEAN CaseInsensitive );
-    // La implementación manual es necesaria o usar FsRtlIsNameInExpression.
+    // La implementaciÃ³n manual es necesaria o usar FsRtlIsNameInExpression.
 
-    // Implementación manual (similar a la original):
+    // ImplementaciÃ³n manual (similar a la original):
     ULONG i = 0;
     UNICODE_STRING tempSubString;
     USHORT mainLenChars = String->Length / sizeof(WCHAR);
@@ -94,7 +94,7 @@ BOOLEAN IsFileSystemSupported(
 
 /**
  * @brief Checks if a file (based on its name information) should be monitored.
- * Implementa lógica de filtrado para reducir el ruido (archivos de sistema, etc.).
+ * Implementa lÃ³gica de filtrado para reducir el ruido (archivos de sistema, etc.).
  */
 BOOLEAN ShouldMonitorFileByPath(
     _In_ PFLT_FILE_NAME_INFORMATION FileNameInfo
@@ -103,17 +103,17 @@ BOOLEAN ShouldMonitorFileByPath(
     PAGED_CODE();
 
     if (FileNameInfo == NULL || FileNameInfo->Name.Length == 0) {
-        return TRUE; // Si no hay nombre, por defecto se monitoriza (o FALSE, según política)
+        return TRUE; // Si no hay nombre, por defecto se monitoriza (o FALSE, segÃºn polÃ­tica)
     }
 
     // Ejemplo de exclusiones (usando FltFindUnicodeSubstring_Implemented o similar)
-    // Hay que tener cuidado con la normalización del path (ej. \SystemRoot\ vs C:\Windows\)
+    // Hay que tener cuidado con la normalizaciÃ³n del path (ej. \SystemRoot\ vs C:\Windows\)
     // FileNameInfo->Name es el path completo normalizado.
 
     // Omitir archivos en directorios del sistema comunes
-    // (Esta lógica es simplista y puede necesitar refinamiento)
+    // (Esta lÃ³gica es simplista y puede necesitar refinamiento)
     if (FltFindUnicodeSubstring_Implemented(&FileNameInfo->Name, L"\\Windows\\System32\\", TRUE)) {
-        // Podría haber excepciones, ej. si algo en System32 escribe en Documentos.
+        // PodrÃ­a haber excepciones, ej. si algo en System32 escribe en Documentos.
         // El chequeo es sobre el path del *archivo accedido*.
         // Si es un archivo DENTRO de System32, probablemente no interese.
         // CS_LOG_TRACE("Skipping monitoring for path in System32: %wZ", &FileNameInfo->Name);
@@ -127,27 +127,27 @@ BOOLEAN ShouldMonitorFileByPath(
         // CS_LOG_TRACE("Skipping monitoring for pagefile.sys: %wZ", &FileNameInfo->Name);
         return FALSE;
     }
-    // Añadir más exclusiones según sea necesario (ej. archivos de log del propio CryptoShield).
+    // AÃ±adir mÃ¡s exclusiones segÃºn sea necesario (ej. archivos de log del propio CryptoShield).
 
-    return TRUE; // Por defecto, monitorizar si no cae en una exclusión.
+    return TRUE; // Por defecto, monitorizar si no cae en una exclusiÃ³n.
 }
 
-// Otras funciones de utilidad del código original (GetFileExtension, IsSystemProcess, etc.)
-// pueden permanecer aquí si son necesarias, ajustando su uso de memoria y cadenas.
+// Otras funciones de utilidad del cÃ³digo original (GetFileExtension, IsSystemProcess, etc.)
+// pueden permanecer aquÃ­ si son necesarias, ajustando su uso de memoria y cadenas.
 // Por ejemplo, DuplicateUnicodeString y FreeUnicodeString se pueden mantener si se necesitan
-// copias de UNICODE_STRING con gestión de memoria específica.
+// copias de UNICODE_STRING con gestiÃ³n de memoria especÃ­fica.
 
-// La función FormatSystemTime del código original es útil para logging.
-// Su implementación usando RtlStringCchPrintfW es correcta.
+// La funciÃ³n FormatSystemTime del cÃ³digo original es Ãºtil para logging.
+// Su implementaciÃ³n usando RtlStringCchPrintfW es correcta.
 
-// La función HashUnicodeString del código original es un hash simple y puede ser útil.
+// La funciÃ³n HashUnicodeString del cÃ³digo original es un hash simple y puede ser Ãºtil.
 
-// SafeCopyMemory es un wrapper, pero RtlCopyMemory con SEH es la forma estándar.
-// Si se mantiene, asegurar que los parámetros sean correctos.
+// SafeCopyMemory es un wrapper, pero RtlCopyMemory con SEH es la forma estÃ¡ndar.
+// Si se mantiene, asegurar que los parÃ¡metros sean correctos.
 
-// IsUserDirectory puede ser útil para enfocar el monitoreo.
-// Su implementación con FltFindUnicodeSubstring_Implemented es correcta.
+// IsUserDirectory puede ser Ãºtil para enfocar el monitoreo.
+// Su implementaciÃ³n con FltFindUnicodeSubstring_Implemented es correcta.
 
-// ValidateProcessAccess puede ser útil para comprobaciones de seguridad,
-// aunque su uso exacto depende del contexto. La corrección para usar PsIsProcessTerminating
-// y la desreferenciación de PEPROCESS son importantes.
+// ValidateProcessAccess puede ser Ãºtil para comprobaciones de seguridad,
+// aunque su uso exacto depende del contexto. La correcciÃ³n para usar PsIsProcessTerminating
+// y la desreferenciaciÃ³n de PEPROCESS son importantes.

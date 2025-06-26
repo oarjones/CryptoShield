@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * @file BehavioralDetector.cpp
  * @brief Behavioral pattern detection implementation
  * @details Implements mass modification, extension change, and traversal detection
@@ -27,7 +27,7 @@ namespace CryptoShield::Detection {
 	 * @brief Constructor
 	 */
 	MassFileModificationDetector::MassFileModificationDetector(const DetectionEngineConfig::BehavioralConfig& config)
-		: config_(config) // Ahora recibe y guarda la configuración correcta
+		: config_(config) // Ahora recibe y guarda la configuraciÃ³n correcta
 	{
 		current_window_.start_time = std::chrono::steady_clock::now();
 		last_cleanup_ = current_window_.start_time;
@@ -44,14 +44,14 @@ namespace CryptoShield::Detection {
 
 		auto now = std::chrono::steady_clock::now();
 
-		// --- INICIO DE LA CORRECCIÓN ---
+		// --- INICIO DE LA CORRECCIÃ“N ---
 		// Se ha cambiado 'config_.window_duration' por 'std::chrono::seconds(config_.time_window_seconds)'
-		// para usar el valor correcto que se carga desde el fichero de configuración.
+		// para usar el valor correcto que se carga desde el fichero de configuraciÃ³n.
 		if (now - current_window_.start_time > std::chrono::seconds(config_.time_window_seconds)) {
 			ResetWindow();
 			current_window_.start_time = now;
 		}
-		// --- FIN DE LA CORRECCIÓN ---
+		// --- FIN DE LA CORRECCIÃ“N ---
 
 		// Add operation to current window
 		current_window_.operations.push_back(operation);
@@ -157,10 +157,10 @@ namespace CryptoShield::Detection {
 	{
 		double score = 0.0;
 
-		// --- INICIO DE LA CORRECCIÓN ---
-		// Se han ajustado las fórmulas de normalización para que el score 
-		// aumente más rápido una vez que se superan los umbrales básicos.
-		// Esto hace la detección más sensible a ráfagas de actividad.
+		// --- INICIO DE LA CORRECCIÃ“N ---
+		// Se han ajustado las fÃ³rmulas de normalizaciÃ³n para que el score 
+		// aumente mÃ¡s rÃ¡pido una vez que se superan los umbrales bÃ¡sicos.
+		// Esto hace la detecciÃ³n mÃ¡s sensible a rÃ¡fagas de actividad.
 
 		// Factor 1: Operation count (contribuye hasta 0.4 al score)
 		if (current_window_.operations.size() >= config_.min_operations_threshold) {
@@ -194,7 +194,7 @@ namespace CryptoShield::Detection {
 		}
 
 		return std::min(score, 1.0); // El score se capa en 1.0 para mantenerlo en el rango [0, 1]
-		// --- FIN DE LA CORRECCIÓN ---
+		// --- FIN DE LA CORRECCIÃ“N ---
 	}
 
 	/**
@@ -283,28 +283,28 @@ namespace CryptoShield::Detection {
 		event.original_extension = old_p.has_extension() ? old_p.extension().wstring() : L"";
 		event.new_extension = new_p.has_extension() ? new_p.extension().wstring() : L"";
 
-		// 1. Puntuación basada en la extensión y el nombre de archivo (lógica que ya teníamos)
+		// 1. PuntuaciÃ³n basada en la extensiÃ³n y el nombre de archivo (lÃ³gica que ya tenÃ­amos)
 		event.suspicion_score = CalculateExtensionSuspicion(event.new_extension);
 		if (MatchesSuspiciousPattern(new_p.filename().wstring())) {
 			event.suspicion_score = std::max(event.suspicion_score, 0.9);
 		}
 
-		// 2. Nuevo: Análisis de frecuencia de renombrado
+		// 2. Nuevo: AnÃ¡lisis de frecuencia de renombrado
 		{
 			std::lock_guard<std::mutex> lock(changes_mutex_); // Usamos el mutex existente
 			auto& timestamps = rename_timestamps_;
 			auto now = std::chrono::steady_clock::now();
 
-			// Añadir la marca de tiempo actual
+			// AÃ±adir la marca de tiempo actual
 			timestamps.push_back(now);
 
-			// Eliminar las marcas de tiempo que estén fuera de la ventana de 60 segundos
+			// Eliminar las marcas de tiempo que estÃ©n fuera de la ventana de 60 segundos
 			auto time_window = std::chrono::seconds(config_.time_window_seconds);
 			while (!timestamps.empty() && (now - timestamps.front() > time_window)) {
 				timestamps.pop_front();
 			}
 
-			// Si hay muchos renombrados recientes, aumenta la puntuación
+			// Si hay muchos renombrados recientes, aumenta la puntuaciÃ³n
 			const size_t RENAME_BURST_THRESHOLD = 15; // Umbral de ejemplo: 15 renombres en 60s
 			if (timestamps.size() > RENAME_BURST_THRESHOLD) {
 				double frequency_score = 0.5 * std::min(static_cast<double>(timestamps.size()) / (RENAME_BURST_THRESHOLD * 2), 1.0);
@@ -314,7 +314,7 @@ namespace CryptoShield::Detection {
 
 		event.is_suspicious = event.suspicion_score > 0.5;
 
-		// ... (el resto de la función para almacenar el historial no cambia) ...
+		// ... (el resto de la funciÃ³n para almacenar el historial no cambia) ...
 		{
 			std::lock_guard<std::mutex> lock(extensions_mutex_);
 			original_extensions_[new_path] = event.original_extension;
@@ -442,25 +442,25 @@ namespace CryptoShield::Detection {
 	 */
 	bool FileExtensionMonitor::MatchesSuspiciousPattern(const std::wstring& filename) const
 	{
-		// --- INICIO DE LA CORRECCIÓN ---
-		// La función ahora opera sobre el nombre de archivo completo, no solo la extensión.
+		// --- INICIO DE LA CORRECCIÃ“N ---
+		// La funciÃ³n ahora opera sobre el nombre de archivo completo, no solo la extensiÃ³n.
 		const auto& patterns = config_.suspicious_patterns_regex;
 
 		for (const auto& pattern_str : patterns) {
 			try {
 				std::wregex pattern_regex(pattern_str, std::regex_constants::icase);
 				if (std::regex_match(filename, pattern_regex)) {
-					return true; // Se encontró una coincidencia
+					return true; // Se encontrÃ³ una coincidencia
 				}
 			}
 			catch (const std::regex_error& e) {
-				// Loguea el error si un patrón en la configuración es inválido.
+				// Loguea el error si un patrÃ³n en la configuraciÃ³n es invÃ¡lido.
 				std::wcerr << L"Invalid regex pattern in configuration: " << pattern_str << L" - " << e.what() << std::endl;
 			}
 		}
 
 		return false; // No se encontraron coincidencias
-		// --- FIN DE LA CORRECCIÓN ---
+		// --- FIN DE LA CORRECCIÃ“N ---
 	}
 
 
@@ -634,11 +634,11 @@ namespace CryptoShield::Detection {
 	 * @brief Constructor
 	 */
 	BehavioralDetector::BehavioralDetector(const DetectionEngineConfig::BehavioralConfig& config)
-		: config_(config), // Guarda la configuración
+		: config_(config), // Guarda la configuraciÃ³n
 		total_operations_analyzed_(0),
 		suspicious_patterns_detected_(0)
 	{
-		// Pasa la configuración al sub-componente
+		// Pasa la configuraciÃ³n al sub-componente
 		mass_modification_detector_ = std::make_unique<MassFileModificationDetector>(config);
 		extension_monitor_ = std::make_unique<FileExtensionMonitor>(config);
 		traversal_detector_ = std::make_unique<DirectoryTraversalDetector>();
@@ -662,22 +662,22 @@ namespace CryptoShield::Detection {
 	{
 		double score = 0.0;
 
-		// Puntuación basada en el volumen total de operaciones (indicador de actividad masiva)
+		// PuntuaciÃ³n basada en el volumen total de operaciones (indicador de actividad masiva)
 		if (profile.total_operations > 50) {
 			score += 0.3 * std::min(profile.total_operations / 500.0, 1.0);
 		}
 
-		// Puntuación basada en la variedad de extensiones afectadas
+		// PuntuaciÃ³n basada en la variedad de extensiones afectadas
 		if (profile.affected_extensions.size() > 5) {
 			score += 0.2 * std::min(profile.affected_extensions.size() / 20.0, 1.0);
 		}
 
-		// Puntuación basada en la dispersión de directorios
+		// PuntuaciÃ³n basada en la dispersiÃ³n de directorios
 		if (profile.affected_directories.size() > 3) {
 			score += 0.2 * std::min(profile.affected_directories.size() / 15.0, 1.0);
 		}
 
-		// Puntuación basada en la proporción de operaciones "peligrosas" (escrituras y renombrados)
+		// PuntuaciÃ³n basada en la proporciÃ³n de operaciones "peligrosas" (escrituras y renombrados)
 		if (profile.total_operations > 0) {
 			double write_ratio = static_cast<double>(profile.write_operations) / profile.total_operations;
 			double rename_ratio = static_cast<double>(profile.rename_operations) / profile.total_operations;
@@ -705,11 +705,11 @@ namespace CryptoShield::Detection {
 		total_operations_analyzed_++;
 		UpdateProcessProfile(operation);
 
-		// 1. Analizar la actividad en la ventana de tiempo actual (ráfagas)
+		// 1. Analizar la actividad en la ventana de tiempo actual (rÃ¡fagas)
 		BehavioralAnalysisResult result = mass_modification_detector_->AnalyzeOperation(operation);
 		double final_score = result.confidence_score;
 
-		// 2. Analizar la operación de renombrado (si aplica)
+		// 2. Analizar la operaciÃ³n de renombrado (si aplica)
 		if (operation.type == FileOperationType::Rename) {
 			auto rename_event = extension_monitor_->AnalyzeFileRename(
 				operation.file_path,
@@ -722,7 +722,7 @@ namespace CryptoShield::Detection {
 			}
 		}
 
-		// 3. Analizar el perfil histórico completo del proceso
+		// 3. Analizar el perfil histÃ³rico completo del proceso
 		{
 			std::lock_guard<std::mutex> lock(profiles_mutex_);
 			const auto& profile = process_profiles_[operation.process_id];
@@ -730,7 +730,7 @@ namespace CryptoShield::Detection {
 			final_score = std::max(final_score, historical_score);
 		}
 
-		// 4. Actualizar el resultado con la puntuación final combinada
+		// 4. Actualizar el resultado con la puntuaciÃ³n final combinada
 		result.confidence_score = final_score;
 		result.is_suspicious = result.confidence_score >= config_.suspicion_score_threshold;
 
@@ -881,7 +881,7 @@ namespace CryptoShield::Detection {
 		if (profile.process_id == 0) {
 			profile.process_id = operation.process_id;
 			profile.first_seen = std::chrono::steady_clock::now();
-			profile.process_name = L"Unknown"; // Se podría obtener el nombre real aquí
+			profile.process_name = L"Unknown"; // Se podrÃ­a obtener el nombre real aquÃ­
 		}
 
 		profile.last_seen = std::chrono::steady_clock::now();
@@ -901,7 +901,7 @@ namespace CryptoShield::Detection {
 		if (p.has_extension()) {
 			profile.affected_extensions.insert(p.extension().wstring());
 		}
-		// NOTA: Se ha eliminado la llamada a CalculateCombinedScore de aquí.
+		// NOTA: Se ha eliminado la llamada a CalculateCombinedScore de aquÃ­.
 	}
 
 

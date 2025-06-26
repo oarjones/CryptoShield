@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file PatternDatabase.h
  * @brief Pattern database for known ransomware families and behaviors

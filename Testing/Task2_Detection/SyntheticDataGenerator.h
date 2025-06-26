@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -8,21 +8,21 @@ namespace CryptoShield::Testing {
 
     /**
      * @class SyntheticDataGenerator
-     * @brief Genera comportamientos sintÈticos para probar el motor de detecciÛn.
+     * @brief Genera comportamientos sint√©ticos para probar el motor de detecci√≥n.
      *
      * Esta clase crea escenarios realistas de ataques de ransomware y de
-     * comportamiento de software legÌtimo para validar la eficacia y la
-     * precisiÛn de los diferentes mÛdulos de detecciÛn.
+     * comportamiento de software leg√≠timo para validar la eficacia y la
+     * precisi√≥n de los diferentes m√≥dulos de detecci√≥n.
      */
     class SyntheticDataGenerator {
     public:
         SyntheticDataGenerator() = default;
 
-        // --- GeneraciÛn de Comportamiento de Ransomware ---
+        // --- Generaci√≥n de Comportamiento de Ransomware ---
 
         /**
          * @brief Simula un ataque de ransomware que cifra archivos en un directorio.
-         * @param target_directory Directorio donde se crear·n y cifrar·n los archivos.
+         * @param target_directory Directorio donde se crear√°n y cifrar√°n los archivos.
          * @param ops_log Vector para registrar las operaciones de archivo generadas.
          */
         void GenerateFileEncryptorBehavior(const std::wstring& target_directory, std::vector<CryptoShield::FileOperationInfo>& ops_log);
@@ -33,11 +33,11 @@ namespace CryptoShield::Testing {
          */
         void GenerateShadowDeletionBehavior(std::vector<std::wstring>& command_log);
 
-        // --- GeneraciÛn de Comportamiento LegÌtimo (Falsos Positivos) ---
+        // --- Generaci√≥n de Comportamiento Leg√≠timo (Falsos Positivos) ---
 
         /**
          * @brief Simula el comportamiento de un software de backup.
-         * @param source_directory Directorio del que se har· "backup".
+         * @param source_directory Directorio del que se har√° "backup".
          * @param backup_file Archivo de backup de destino.
          * @param ops_log Vector para registrar las operaciones de archivo generadas.
          */
@@ -56,15 +56,15 @@ namespace CryptoShield::Testing {
          * @brief Crea un conjunto de archivos de prueba en un directorio.
          * @param directory Directorio de destino.
          * @param extensions Extensiones de los archivos a crear.
-         * @param files_per_extension N˙mero de archivos a crear por cada extensiÛn.
+         * @param files_per_extension N√∫mero de archivos a crear por cada extensi√≥n.
          * @return Lista de rutas de los archivos creados.
          */
         std::vector<std::wstring> CreateTestFiles(const std::wstring& directory, const std::vector<std::wstring>& extensions, size_t files_per_extension);
 
         /**
-         * @brief Simula el cifrado de archivos (lectura, modificaciÛn, escritura y renombrado).
+         * @brief Simula el cifrado de archivos (lectura, modificaci√≥n, escritura y renombrado).
          * @param files Vector de archivos a "cifrar".
-         * @param pid ID del proceso que realiza la acciÛn.
+         * @param pid ID del proceso que realiza la acci√≥n.
          * @param ops_log Vector para registrar las operaciones.
          */
         void EncryptTestFiles(const std::vector<std::wstring>& files, uint32_t pid, std::vector<CryptoShield::FileOperationInfo>& ops_log);

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file TraditionalEngine.h
  * @brief Traditional detection engine interface for ransomware detection
@@ -103,7 +103,7 @@ namespace CryptoShield::Detection {
     //};
 
 
-    // A�ade esta nueva estructura, puede estar fuera o dentro de la clase TraditionalEngine
+    // Añade esta nueva estructura, puede estar fuera o dentro de la clase TraditionalEngine
     struct EngineStatsData {
         size_t operations_analyzed;
         size_t threats_detected;

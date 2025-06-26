@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * @file FileMonitor.c
  * @brief File operation monitoring and analysis implementation
  * @details Handles IRP pre/post operation callbacks and constructs messages for user mode.
@@ -13,10 +13,10 @@
 
 
  // ----- Helper function to send file operation notification -----
- // (Nombre según documento técnico: SendFileOperationNotification)
- // Esta función es interna a FileMonitor.c o declarada en CryptoShield.h si se usa en otros .c
- // El documento la tiene en FileMonitor.c, así que la hacemos static si solo se usa aquí.
- // Si SendMessageToUserService es la función genérica de Communication.c, esta sería un wrapper.
+ // (Nombre segÃºn documento tÃ©cnico: SendFileOperationNotification)
+ // Esta funciÃ³n es interna a FileMonitor.c o declarada en CryptoShield.h si se usa en otros .c
+ // El documento la tiene en FileMonitor.c, asÃ­ que la hacemos static si solo se usa aquÃ­.
+ // Si SendMessageToUserService es la funciÃ³n genÃ©rica de Communication.c, esta serÃ­a un wrapper.
 
 static NTSTATUS SendFileOperationNotification(
     _In_ PFLT_CALLBACK_DATA Data,    // Para obtener PID/TID, Timestamp
@@ -28,7 +28,7 @@ static NTSTATUS SendFileOperationNotification(
     NTSTATUS status;
     CS_FILE_OPERATION_PAYLOAD payload = { 0 }; // De Shared.h
     USHORT filePathNameLengthChars = 0;        // Longitud en caracteres, sin NUL
-    UNREFERENCED_PARAMETER(FltObjects); // <<< --- AÑADIR ESTA LÍNEA AL INICIO DE LA FUNCIÓN
+    UNREFERENCED_PARAMETER(FltObjects); // <<< --- AÃ‘ADIR ESTA LÃNEA AL INICIO DE LA FUNCIÃ“N
 
     if (g_Context.IsUnloading || !g_Context.ClientConnected || g_Context.ClientPort == NULL) {
         return STATUS_PORT_DISCONNECTED; // O STATUS_SHUTDOWN_IN_PROGRESS
@@ -37,10 +37,10 @@ static NTSTATUS SendFileOperationNotification(
     // Rellenar el payload
     payload.Header.MessageType = MSG_TYPE_FILE_OPERATION; // De Shared.h
     // payload.Header.MessageId = ... ; // Opcional, para seguimiento
-    payload.Header.PayloadSize = sizeof(CS_FILE_OPERATION_PAYLOAD); // Tamaño del payload fijo
+    payload.Header.PayloadSize = sizeof(CS_FILE_OPERATION_PAYLOAD); // TamaÃ±o del payload fijo
 
     payload.ProcessId = FltGetRequestorProcessId(Data);
-    payload.ThreadId = HandleToULong(PsGetCurrentThreadId()); // O FltGetRequestorThreadId(Data) si es aplicable y más fácil
+    payload.ThreadId = HandleToULong(PsGetCurrentThreadId()); // O FltGetRequestorThreadId(Data) si es aplicable y mÃ¡s fÃ¡cil
     KeQuerySystemTime(&payload.Timestamp);
     payload.OperationType = OperationTypeShared;
 
@@ -50,17 +50,17 @@ static NTSTATUS SendFileOperationNotification(
         // payload.FilePathLength es en caracteres.
         // payload.FilePath es WCHAR[MAX_FILE_PATH_CHARS]
         filePathNameLengthChars = FileNameInfo->Name.Length / sizeof(WCHAR);
-        if (filePathNameLengthChars >= MAX_FILE_PATH_CHARS) { // Comprobar si cabe (incluyendo NUL implícito)
+        if (filePathNameLengthChars >= MAX_FILE_PATH_CHARS) { // Comprobar si cabe (incluyendo NUL implÃ­cito)
             filePathNameLengthChars = MAX_FILE_PATH_CHARS - 1; // Truncar para dejar espacio para NUL
         }
         RtlCopyMemory(payload.FilePath, FileNameInfo->Name.Buffer, filePathNameLengthChars * sizeof(WCHAR));
-        payload.FilePath[filePathNameLengthChars] = L'\0'; // Asegurar terminación NUL
+        payload.FilePath[filePathNameLengthChars] = L'\0'; // Asegurar terminaciÃ³n NUL
         payload.FilePathLength = filePathNameLengthChars; // Longitud en caracteres sin NUL
     }
     else {
-        // No hay nombre de archivo o es una operación sin nombre (ej. sobre un handle abierto)
-        // Podríamos intentar obtenerlo del FltObjects->FileObject si FileNameInfo es NULL.
-        // Por ahora, si no hay FileNameInfo, se deja vacío.
+        // No hay nombre de archivo o es una operaciÃ³n sin nombre (ej. sobre un handle abierto)
+        // PodrÃ­amos intentar obtenerlo del FltObjects->FileObject si FileNameInfo es NULL.
+        // Por ahora, si no hay FileNameInfo, se deja vacÃ­o.
         payload.FilePath[0] = L'\0';
         payload.FilePathLength = 0;
     }
@@ -72,11 +72,11 @@ static NTSTATUS SendFileOperationNotification(
 
     // Enviar el mensaje al servicio de usuario
     // Asumimos que SendMessageToUserService se encarga de FILTER_MESSAGE_HEADER si espera respuesta.
-    // Si es una notificación pura sin esperar respuesta directa del servicio para esta operación:
+    // Si es una notificaciÃ³n pura sin esperar respuesta directa del servicio para esta operaciÃ³n:
     status = SendMessageToUserService(
         (PCS_MESSAGE_PAYLOAD_HEADER)&payload,
         sizeof(CS_FILE_OPERATION_PAYLOAD),
-        NULL,  // No se espera buffer de respuesta específico para esta notificación.
+        NULL,  // No se espera buffer de respuesta especÃ­fico para esta notificaciÃ³n.
         NULL   // No se espera longitud de respuesta.
     );
 
@@ -97,7 +97,7 @@ static NTSTATUS SendFileOperationNotification(
 // ----- Minifilter Operation Callbacks -----
 
 /**
- * @brief Pre-operation callback (nombre del doc. técnico: PreOperationCallback)
+ * @brief Pre-operation callback (nombre del doc. tÃ©cnico: PreOperationCallback)
  * @details Called before an I/O operation is passed to the file system
  */
 FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
@@ -115,25 +115,25 @@ FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
     *CompletionContext = NULL;
 
     
-    // Si la operación viene de nuestro propio servicio, la ignoramos.
+    // Si la operaciÃ³n viene de nuestro propio servicio, la ignoramos.
     if (FltGetRequestorProcessId(Data) == g_Context.UserModeProcessId) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
     
 
-    // Comprobar si el driver se está descargando o si el monitoreo está deshabilitado.
+    // Comprobar si el driver se estÃ¡ descargando o si el monitoreo estÃ¡ deshabilitado.
     if (g_Context.IsUnloading || !g_Context.MonitoringEnabled) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK; // No hacer nada
     }
 
-    // Omitir operaciones del sistema de paginación para evitar recursión y sobrecarga.
+    // Omitir operaciones del sistema de paginaciÃ³n para evitar recursiÃ³n y sobrecarga.
     if (FlagOn(Data->Iopb->OperationFlags, SL_OPEN_PAGING_FILE)) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
     // Omitir operaciones en el volumen del sistema de logs (si se conoce).
     // if (FltObjects->Volume == g_SystemLogVolume) return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
-    // Determinar el tipo de operación según IRP_MJ_*, y si es necesario, IRP_MN_*.
+    // Determinar el tipo de operaciÃ³n segÃºn IRP_MJ_*, y si es necesario, IRP_MN_*.
     // Esto debe mapear a los FILE_OP_TYPE_* de Shared.h.
     switch (Data->Iopb->MajorFunction) {
     case IRP_MJ_CREATE:
@@ -142,60 +142,60 @@ FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
         break;
     case IRP_MJ_WRITE:
         sharedFileOpType = FILE_OP_TYPE_WRITE;
-        // Para Write, post-op puede ser útil para ver el resultado.
+        // Para Write, post-op puede ser Ãºtil para ver el resultado.
         callbackStatus = FLT_PREOP_SUCCESS_WITH_CALLBACK;
         break;
     case IRP_MJ_SET_INFORMATION:
-        // Para IRP_MJ_SET_INFORMATION, el tipo de operación depende de FileInformationClass.
+        // Para IRP_MJ_SET_INFORMATION, el tipo de operaciÃ³n depende de FileInformationClass.
         switch (Data->Iopb->Parameters.SetFileInformation.FileInformationClass) {
         case FileRenameInformation:
         case FileRenameInformationEx:
-            // También FileRenameInformationBypassAccessCheck si se maneja
+            // TambiÃ©n FileRenameInformationBypassAccessCheck si se maneja
             sharedFileOpType = FILE_OP_TYPE_RENAME;
             break;
         case FileDispositionInformation:
         case FileDispositionInformationEx:
-            // También FileDispositionInformationBypassAccessCheck
+            // TambiÃ©n FileDispositionInformationBypassAccessCheck
             sharedFileOpType = FILE_OP_TYPE_DELETE;
             break;
         default:
-            sharedFileOpType = FILE_OP_TYPE_SET_INFORMATION; // Genérico para otros SetInfo
+            sharedFileOpType = FILE_OP_TYPE_SET_INFORMATION; // GenÃ©rico para otros SetInfo
             break;
         }
-        // Post-op para SetInfo puede ser útil.
+        // Post-op para SetInfo puede ser Ãºtil.
         callbackStatus = FLT_PREOP_SUCCESS_WITH_CALLBACK;
         break;
     case IRP_MJ_CLEANUP:
         sharedFileOpType = FILE_OP_TYPE_CLEANUP;
-        // No se necesita post-op para Cleanup según el documento.
+        // No se necesita post-op para Cleanup segÃºn el documento.
         callbackStatus = FLT_PREOP_SUCCESS_NO_CALLBACK;
         break;
     default:
-        // Operación no monitorizada explícitamente, no hacer nada.
+        // OperaciÃ³n no monitorizada explÃ­citamente, no hacer nada.
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    // Si es una operación que queremos notificar:
+    // Si es una operaciÃ³n que queremos notificar:
     if (sharedFileOpType != 0) {
         InterlockedIncrement64(&g_Context.FileOperationsMonitored);
 
-        // Solo obtener nombre de archivo y enviar notificación si hay un cliente conectado.
+        // Solo obtener nombre de archivo y enviar notificaciÃ³n si hay un cliente conectado.
         if (g_Context.ClientConnected) {
             status = GetNormalizedFileNameInformation(Data, &fileNameInfo);
             if (NT_SUCCESS(status)) {
-                // Opcional: Filtrar por nombre de archivo aquí usando ShouldMonitorFileByPath(fileNameInfo)
+                // Opcional: Filtrar por nombre de archivo aquÃ­ usando ShouldMonitorFileByPath(fileNameInfo)
                 // if (ShouldMonitorFileByPath(fileNameInfo)) { ... }
 
-                // Enviar notificación al servicio de usuario.
+                // Enviar notificaciÃ³n al servicio de usuario.
                 SendFileOperationNotification(Data, FltObjects, fileNameInfo, sharedFileOpType);
                 // El llamador de SendFileOperationNotification es responsable de liberar fileNameInfo si es necesario.
                 // Pero GetNormalizedFileNameInformation devuelve un puntero que debe ser liberado por el llamador de GetNormalizedFileNameInformation.
             }
             else {
-                // No se pudo obtener el nombre, ¿enviar notificación sin nombre?
+                // No se pudo obtener el nombre, Â¿enviar notificaciÃ³n sin nombre?
                 // O registrar error y continuar.
                 CS_LOG_WARNING("Could not get file name for op type %u. Status: 0x%08X", sharedFileOpType, status);
-                // Podría llamarse a SendFileOperationNotification con fileNameInfo = NULL.
+                // PodrÃ­a llamarse a SendFileOperationNotification con fileNameInfo = NULL.
                 SendFileOperationNotification(Data, FltObjects, NULL, sharedFileOpType);
             }
 
@@ -206,8 +206,8 @@ FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
         }
     }
 
-    // Por ahora, el driver no bloquea ninguna operación, solo observa.
-    // Si se quisiera bloquear, se devolvería FLT_PREOP_COMPLETE y se establecería Data->IoStatus.Status.
+    // Por ahora, el driver no bloquea ninguna operaciÃ³n, solo observa.
+    // Si se quisiera bloquear, se devolverÃ­a FLT_PREOP_COMPLETE y se establecerÃ­a Data->IoStatus.Status.
     // Ejemplo:
     // Data->IoStatus.Status = STATUS_ACCESS_DENIED;
     // Data->IoStatus.Information = 0;
@@ -217,32 +217,32 @@ FLT_PREOP_CALLBACK_STATUS PreOperationCallback(
 }
 
 /**
- * @brief Post-operation callback (nombre del doc. técnico: PostOperationCallback)
+ * @brief Post-operation callback (nombre del doc. tÃ©cnico: PostOperationCallback)
  * @details Called after an I/O operation completes
  */
 FLT_POSTOP_CALLBACK_STATUS PostOperationCallback(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_opt_ PVOID CompletionContext, // Contexto pasado desde pre-operación
+    _In_opt_ PVOID CompletionContext, // Contexto pasado desde pre-operaciÃ³n
     _In_ FLT_POST_OPERATION_FLAGS Flags
 )
 {
     UNREFERENCED_PARAMETER(FltObjects);
     UNREFERENCED_PARAMETER(CompletionContext);
 
-    // Comprobar si el driver se está descargando.
+    // Comprobar si el driver se estÃ¡ descargando.
     if (g_Context.IsUnloading || !g_Context.MonitoringEnabled) {
-        return FLT_POSTOP_FINISHED_PROCESSING; // No hacer nada más
+        return FLT_POSTOP_FINISHED_PROCESSING; // No hacer nada mÃ¡s
     }
 
-    // FLT_POSTOP_DRAINING indica que el filtro se está desconectando del volumen.
+    // FLT_POSTOP_DRAINING indica que el filtro se estÃ¡ desconectando del volumen.
     if (FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING)) {
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
-    // Aquí se podría analizar el resultado de la operación (Data->IoStatus.Status)
-    // y enviar una notificación adicional si es necesario.
-    // Por ejemplo, para IRP_MJ_CREATE, se podría verificar si el archivo se creó o abrió con éxito.
+    // AquÃ­ se podrÃ­a analizar el resultado de la operaciÃ³n (Data->IoStatus.Status)
+    // y enviar una notificaciÃ³n adicional si es necesario.
+    // Por ejemplo, para IRP_MJ_CREATE, se podrÃ­a verificar si el archivo se creÃ³ o abriÃ³ con Ã©xito.
     if (Data->Iopb->MajorFunction == IRP_MJ_CREATE) {
         if (NT_SUCCESS(Data->IoStatus.Status)) {
             CS_LOG_TRACE("PostCreate: File operation successful for %wZ, status 0x%08X, info 0x%p",
@@ -254,11 +254,11 @@ FLT_POSTOP_CALLBACK_STATUS PostOperationCallback(
             CS_LOG_TRACE("PostCreate: File operation failed for %wZ, status 0x%08X",
                 &FltObjects->FileObject->FileName, Data->IoStatus.Status);
         }
-        // Podría enviarse otra notificación aquí con el resultado.
+        // PodrÃ­a enviarse otra notificaciÃ³n aquÃ­ con el resultado.
     }
-    // Lógica similar para otras operaciones si es necesario.
+    // LÃ³gica similar para otras operaciones si es necesario.
 
-    return FLT_POSTOP_FINISHED_PROCESSING; // Indicar que hemos terminado con esta operación.
+    return FLT_POSTOP_FINISHED_PROCESSING; // Indicar que hemos terminado con esta operaciÃ³n.
 }
 
 
@@ -283,10 +283,10 @@ NTSTATUS GetNormalizedFileNameInformation(
     *FileNameInfo = NULL; // Inicializar el puntero de salida
 
     // Obtener el nombre de archivo normalizado.
-    // FLT_FILE_NAME_QUERY_DEFAULT: El manejador de filtros elige el mejor método.
-    // FLT_FILE_NAME_NORMALIZED: Intenta obtener el nombre canónico.
-    // También se puede especificar FLT_FILE_NAME_OPENED (para nombres ya abiertos) o
-    // FLT_FILE_NAME_SHORT (para nombres cortos 8.3, menos útil).
+    // FLT_FILE_NAME_QUERY_DEFAULT: El manejador de filtros elige el mejor mÃ©todo.
+    // FLT_FILE_NAME_NORMALIZED: Intenta obtener el nombre canÃ³nico.
+    // TambiÃ©n se puede especificar FLT_FILE_NAME_OPENED (para nombres ya abiertos) o
+    // FLT_FILE_NAME_SHORT (para nombres cortos 8.3, menos Ãºtil).
     status = FltGetFileNameInformation(
         Data,
         FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT,
@@ -301,7 +301,7 @@ NTSTATUS GetNormalizedFileNameInformation(
     }
 
     // (Opcional) Parsear el nombre para tener acceso a componentes como Volumen, Directorio, Stream.
-    // Esto es útil si se necesita analizar partes específicas del nombre.
+    // Esto es Ãºtil si se necesita analizar partes especÃ­ficas del nombre.
     // status = FltParseFileNameInformation(*FileNameInfo);
     // if (!NT_SUCCESS(status)) {
     //     CS_LOG_WARNING("FltParseFileNameInformation failed with status 0x%08X for '%wZ'",

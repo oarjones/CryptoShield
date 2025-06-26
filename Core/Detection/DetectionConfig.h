@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /**
  * @file DetectionConfig.h
  * @brief Unified configuration system for traditional detection engine
