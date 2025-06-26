@@ -11,6 +11,8 @@
 #include <ntddk.h> // Required for DPC, Timer, etc.
 #include "../CryptoShield.h" // Access to g_Context, CRYPTOSHIELD_POOL_TAG, CS_LOG_ERROR
 #include "CallbackProtection.h" // Function declarations for this file
+#include "HookDetection.h"      // For IsSdtHooked()
+#include "MemoryIntegrity.h"    // For IsDriverMemoryIntact()
 
 // External declaration for FilterRegistration.Callbacks
 // This is defined in CryptoShield.c
@@ -57,8 +59,29 @@ VOID IntegrityCheckDpcRoutine(
 
     if (comparisonResult != context->CallbackTableSize) {
         CS_LOG_ERROR("¡ALERTA DE TAMPERING! La tabla de callbacks del driver ha sido modificada.");
-        // In a future step, we might trigger more actions here.
+        // Future: Trigger more actions (e.g., notify user-mode, attempt restoration if safe).
     }
+
+    // Check for SSDT hooks
+    // IsSdtHooked itself logs if a hook is detected.
+    // We log a general alert here as well, or rely on IsSdtHooked's specific log.
+    // For consistency with the request, log here.
+    if (IsSdtHooked()) { // This function should log specifics internally
+        CS_LOG_ERROR("¡ALERTA DE TAMPERING! Se ha detectado un hook en la SSDT.");
+    }
+
+    // Check for driver memory modification
+    // IsDriverMemoryIntact itself logs if a modification is detected.
+    // Log a general alert here as well.
+    if (!IsDriverMemoryIntact()) { // This function should log specifics internally
+        CS_LOG_ERROR("¡ALERTA DE TAMPERING! La memoria del driver ha sido modificada.");
+    }
+
+    // Note: The DPC routine should complete as quickly as possible.
+    // If IsSdtHooked or IsDriverMemoryIntact become too slow,
+    // they might need to be offloaded to a worker thread.
+    // However, for read-only checks, they are generally acceptable in a DPC
+    // if their execution time is minimal and predictable.
 }
 
 /**

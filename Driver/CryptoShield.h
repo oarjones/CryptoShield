@@ -66,6 +66,11 @@ typedef struct _CRYPTOSHIELD_CONTEXT {
     ULONG CallbackTableSize;        // Tamaño de la tabla
     KTIMER IntegrityTimer;          // Timer para la verificación periódica
     KDPC IntegrityDpc;              // DPC para ejecutar la verificación
+
+    // Driver Memory Integrity
+    PVOID DriverImageBase;          // Base address of the driver image
+    ULONG DriverImageSize;          // Size of the driver image
+    ULONG64 InitialDriverChecksum;  // Checksum of the driver image calculated at load time
 } CRYPTOSHIELD_CONTEXT, * PCRYPTOSHIELD_CONTEXT;
 
 // Global driver context

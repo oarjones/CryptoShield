@@ -8,8 +8,12 @@
 
 #include "CryptoShield.h" // Incluye Shared.h indirectamente
 #include "Protection/CallbackProtection.h" // For callback protection functions
+#include "Protection/HookDetection.h"    // For GetNtoskrnlBoundaries, InitializeSdtTable
+#include "Protection/MemoryIntegrity.h"  // For InitializeMemoryIntegrity, CleanupMemoryIntegrity
+#include "Communication.h" // For communication port functions (ConnectNotifyCallback etc.)
+#include "Utilities.h"     // For IsFileSystemSupported
 
- // ----- Global Driver Context -----
+// ----- Global Driver Context -----
 CRYPTOSHIELD_CONTEXT g_Context = { 0 };
 
 // ----- Forward Declarations (si alguna función de este archivo se llama antes de su definición) -----
@@ -200,7 +204,83 @@ NTSTATUS DriverEntry(
         return status;
     }
 
-    CS_LOG_INFO("CryptoShield driver loaded successfully.");
+    // Initialize Ntoskrnl boundaries for SSDT checks
+    CS_LOG_TRACE("Initializing Ntoskrnl.exe boundary detection...");
+    status = GetNtoskrnlBoundaries(&g_NtoskrnlInfo); // g_NtoskrnlInfo is defined in HookDetection.c
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to get Ntoskrnl.exe boundaries: 0x%08X. SSDT checks will be impaired.", status);
+        // This might be considered critical depending on policy. For now, log and continue if other protections are up.
+        // Or, to be strict:
+        // CleanupCallbackProtection();
+        // FltStopFiltering(g_Context.FilterHandle);
+        // FltCloseCommunicationPort(g_Context.ServerPort);
+        // g_Context.ServerPort = NULL;
+        // FltUnregisterFilter(g_Context.FilterHandle);
+        // g_Context.FilterHandle = NULL;
+        // ExDeleteResourceLite(&g_Context.PortResource);
+        // return status;
+    }
+
+    // Initialize SSDT table information for hook detection
+    // This should be done after GetNtoskrnlBoundaries if it's a dependency for future validation, though currently not.
+    if (NT_SUCCESS(status)) { // Only proceed if ntoskrnl boundaries were found (or if we decide it's not fatal)
+        CS_LOG_TRACE("Initializing SDT Table for hook detection...");
+        status = InitializeSdtTable(); // g_KeServiceDescriptorTable is in HookDetection.c
+        if (!NT_SUCCESS(status)) {
+            CS_LOG_ERROR("Failed to initialize SDT Table: 0x%08X. SSDT hook detection will be unavailable.", status);
+            // This is critical for SSDT hook detection.
+            // Depending on policy, driver load could fail here.
+            // For now, we log and continue, as other features might still work.
+            // If this is considered fatal:
+            // CleanupCallbackProtection();
+            // FltStopFiltering(g_Context.FilterHandle);
+            // FltCloseCommunicationPort(g_Context.ServerPort); ... etc.
+            // return status;
+        }
+    }
+    // Reset status to SUCCESS if previous non-fatal errors occurred but we decided to continue.
+    // However, if any of these are truly critical, the status from them should propagate.
+    // For this implementation, let's assume they are critical for full functionality.
+    // If GetNtoskrnlBoundaries or InitializeSdtTable failed, we might not want to load.
+    // Let's refine this: if any of these new critical init steps fail, we *should* unload.
+
+    // Re-evaluating the error handling for strictness:
+    // If GetNtoskrnlBoundaries failed, InitializeSdtTable might not be as useful,
+    // and IsSdtHooked would fail.
+    // Let's make them sequential critical steps.
+
+    if (!NT_SUCCESS(status)) { // Check if GetNtoskrnlBoundaries or InitializeSdtTable failed
+        CS_LOG_ERROR("A critical hook detection initialization failed. Unloading driver.");
+        CleanupCallbackProtection();
+        FltStopFiltering(g_Context.FilterHandle);
+        FltCloseCommunicationPort(g_Context.ServerPort);
+        g_Context.ServerPort = NULL;
+        FltUnregisterFilter(g_Context.FilterHandle);
+        g_Context.FilterHandle = NULL;
+        ExDeleteResourceLite(&g_Context.PortResource);
+        return status; // Return the first error that occurred
+    }
+
+
+    // Initialize Memory Integrity checking
+    CS_LOG_TRACE("Initializing memory integrity protection...");
+    status = InitializeMemoryIntegrity(DriverObject);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to initialize memory integrity protection: 0x%08X", status);
+        // This is a critical self-protection feature. Fail driver load.
+        CleanupCallbackProtection();
+        // Note: InitializeSdtTable doesn't have a dedicated cleanup, g_KeServiceDescriptorTable is just nulled on error.
+        // g_NtoskrnlInfo also doesn't allocate resources that need explicit cleanup here.
+        FltStopFiltering(g_Context.FilterHandle);
+        FltCloseCommunicationPort(g_Context.ServerPort);
+        g_Context.ServerPort = NULL;
+        FltUnregisterFilter(g_Context.FilterHandle);
+        g_Context.FilterHandle = NULL;
+        ExDeleteResourceLite(&g_Context.PortResource);
+        return status;
+    }
+
+    CS_LOG_INFO("CryptoShield driver loaded successfully with all protection mechanisms initialized.");
     return STATUS_SUCCESS;
 }
 
@@ -219,7 +299,10 @@ NTSTATUS FilterUnloadCallback(
 
     CS_LOG_INFO("CryptoShield driver unloading...");
 
-    // Clean up callback protection first
+    // Clean up memory integrity protection
+    CleanupMemoryIntegrity();
+
+    // Clean up callback protection
     CleanupCallbackProtection();
 
     // Indicar que el driver se está descargando para detener nuevas operaciones/mensajes.
