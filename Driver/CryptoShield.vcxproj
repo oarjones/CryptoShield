@@ -139,6 +139,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Communication.h" />
     <ClInclude Include="CryptoShield.h" />
     <ClInclude Include="Protection\CallbackProtection.h" />
     <ClInclude Include="Protection\HookDetection.h" />
