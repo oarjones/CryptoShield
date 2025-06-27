@@ -14,6 +14,22 @@
 #include <algorithm>
 #include <psapi.h>
 #include <optional>
+#include <chrono> // Required for std::chrono functions
+#include <iomanip> // For std::put_time
+#include <sstream> // For std::wstringstream
+
+// Helper function for timestamp formatting (if not already available in Utils)
+namespace { // Anonymous namespace for utility local to this file
+    std::wstring FormatTimestamp(const std::chrono::system_clock::time_point& tp) {
+        std::time_t t = std::chrono::system_clock::to_time_t(tp);
+        std::tm tm_info;
+        localtime_s(&tm_info, &t); // Use localtime_s for safety
+
+        std::wstringstream wss;
+        wss << std::put_time(&tm_info, L"%Y-%m-%d %H:%M:%S");
+        return wss.str();
+    }
+} // anonymous namespace
 
 
 namespace CryptoShield {
@@ -137,7 +153,7 @@ void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& p
 
     std::wstringstream log_entry_stream; // Renamed to avoid conflict with log_entry in other functions
     log_entry_stream << L"[KERNEL TAMPER ALERT] Critical tamper detected by kernel driver!" << std::endl;
-    log_entry_stream << L"  Timestamp (Service Reception): " << Utils::GetFormattedTimestamp(std::chrono::system_clock::now()) << std::endl;
+    log_entry_stream << L"  Timestamp (Service Reception): " << FormatTimestamp(std::chrono::system_clock::now()) << std::endl;
     log_entry_stream << L"  Message Type: 0x" << std::hex << payload.Header.MessageType << std::dec << std::endl;
     log_entry_stream << L"  Tamper Type Code: " << payload.TamperType << std::endl;
 

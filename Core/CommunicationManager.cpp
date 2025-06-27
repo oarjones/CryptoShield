@@ -527,6 +527,47 @@ namespace CryptoShield {
 					// Tamper alerts do not expect a reply from user mode.
 					break;
 				}
+				case MSG_TYPE_TAMPER_DETECTED:
+				{
+					// Validate size for the specific payload: FILTER_MESSAGE_HEADER + CS_TAMPER_ALERT_PAYLOAD
+					// Note: actual_crypto_payload_header points to the CS_MESSAGE_PAYLOAD_HEADER part.
+					// The full message in buffer starts with PFILTER_MESSAGE_HEADER.
+					// bytes_transferred is the total size received from the driver.
+					const size_t min_expected_size_tamper = sizeof(FILTER_MESSAGE_HEADER) + sizeof(CS_TAMPER_ALERT_PAYLOAD);
+					if (bytes_transferred < min_expected_size_tamper) {
+						LogError("MessageThreadProc - Received message too small for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
+						IncrementErrorStats(); // Helper function to increment error count safely
+						continue;
+					}
+
+					PCS_TAMPER_ALERT_PAYLOAD tamper_payload = reinterpret_cast<PCS_TAMPER_ALERT_PAYLOAD>(actual_crypto_payload_header);
+
+					// Further validation using PayloadSize from the header itself.
+					// The driver sets PayloadSize to sizeof(CS_TAMPER_ALERT_PAYLOAD).
+					// So, total size should be at least FILTER_MESSAGE_HEADER + tamper_payload->Header.PayloadSize.
+					if (bytes_transferred < (sizeof(FILTER_MESSAGE_HEADER) + tamper_payload->Header.PayloadSize)) {
+						LogError("MessageThreadProc - Received message smaller than specified PayloadSize for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
+						IncrementErrorStats();
+						continue;
+					}
+
+					// Check for inconsistent payload size reported by driver vs struct size
+					if (tamper_payload->Header.PayloadSize != sizeof(CS_TAMPER_ALERT_PAYLOAD)) {
+						LogError("MessageThreadProc - PayloadSize in CS_TAMPER_ALERT_PAYLOAD header does not match sizeof(CS_TAMPER_ALERT_PAYLOAD)", ERROR_INVALID_DATA);
+						IncrementErrorStats();
+						continue;
+					}
+
+					if (message_processor_) {
+						message_processor_->ProcessKernelTamperAlert(*tamper_payload);
+						IncrementMessagesReceivedStats(); // Helper function
+					} else {
+						LogError("MessageThreadProc - MessageProcessor not set, cannot process tamper alert.", ERROR_INVALID_STATE);
+						IncrementErrorStats();
+					}
+					// Tamper alerts do not expect a reply to the driver.
+					break;
+				}
 				default:
 				{
 					std::wcout << L"[CommunicationManager] Received unhandled message type: "
@@ -558,6 +599,24 @@ namespace CryptoShield {
 		}
 
 		std::wcout << L"[CommunicationManager] Message thread stopped" << std::endl;
+	}
+
+	/**
+	 * @brief Safely increments the messages received counter.
+	 */
+	void CommunicationManager::IncrementMessagesReceivedStats()
+	{
+		std::lock_guard<std::mutex> lock(stats_mutex_);
+		statistics_.messages_received++;
+	}
+
+	/**
+	 * @brief Safely increments the error counter.
+	 */
+	void CommunicationManager::IncrementErrorStats()
+	{
+		std::lock_guard<std::mutex> lock(stats_mutex_);
+		statistics_.errors++;
 	}
 
 	/**

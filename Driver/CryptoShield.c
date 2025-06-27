@@ -419,18 +419,35 @@ NTSTATUS FilterUnloadCallback(
     // The IsUnloading flag should prevent new items from being added by DPCs.
     if (g_Context.TamperAlertQueueLock != NULL) { // Check if spinlock was initialized
         KIRQL oldIrql;
+        CS_LOG_TRACE("Acquiring TamperAlertQueueLock for cleanup.");
         KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
 
         while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
             listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
+            // Ensure listEntry is not NULL, though IsListEmpty should prevent this.
+            // However, if the list is corrupted, CONTAINING_RECORD could crash.
+            // Given this is unload path and under spinlock, corruption is less likely
+            // unless there was prior memory corruption.
+            if (listEntry == NULL) { // Should not happen with IsListEmpty check
+                 CS_LOG_ERROR("RemoveHeadList returned NULL from a non-empty list. Queue might be corrupted.");
+                 break;
+            }
             workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
-            CS_LOG_INFO("Freeing queued tamper alert work item (Type: %u) during unload.", workItem->AlertPayload.TamperType);
-            CS_FREE_POOL(workItem);
+            // workItem could be NULL if listEntry was bad.
+            if (workItem != NULL) { // Check if workItem is valid before accessing its members
+                CS_LOG_INFO("Freeing queued tamper alert work item (Type: %u) during unload.", workItem->AlertPayload.TamperType);
+                CS_FREE_POOL(workItem);
+            } else {
+                CS_LOG_ERROR("CONTAINING_RECORD resulted in NULL workItem. Skipping free for this entry.");
+                // This indicates a severe issue, potentially list corruption or bad cast.
+            }
         }
         // g_Context.IsWorkItemScheduled is not critical to reset here as the work item is being freed.
         KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
         CS_LOG_TRACE("TamperAlertQueue drained.");
     }
+    // Ensure the spinlock itself is not accessed if it was never initialized,
+    // though in a normal flow it would be.
 
 
     // 2. Free the IoWorkItem

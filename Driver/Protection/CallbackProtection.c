@@ -137,17 +137,22 @@ VOID IntegrityCheckDpcRoutine(
         // 4. Planificar la ejecución del worker thread si no está ya planificado
         //    y el driver no se está descargando.
         if (!context->IsWorkItemScheduled && !context->IsUnloading) {
-            context->IsWorkItemScheduled = TRUE;
             // The context parameter for IoQueueWorkItem is g_Context.TamperAlertWorkItem->DeviceObject,
             // but ProcessTamperAlertQueueWorkRoutine doesn't use its PVOID Context argument.
             // So we can pass NULL or any other context if needed by the routine in the future.
             // The third parameter to IoQueueWorkItem is the WorkQueueType. DelayedWorkQueue is common.
             // The fourth parameter is the actual context passed to ProcessTamperAlertQueueWorkRoutine.
-            IoQueueWorkItem(context->TamperAlertWorkItem,
+            if (IoQueueWorkItem(context->TamperAlertWorkItem,
                             ProcessTamperAlertQueueWorkRoutine,
                             DelayedWorkQueue, // Or CriticalWorkQueue if higher priority needed
-                            NULL);            // Context for ProcessTamperAlertQueueWorkRoutine (can be NULL)
-            CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine encolado.");
+                            NULL) != NULL) { // Context for ProcessTamperAlertQueueWorkRoutine (can be NULL)
+                context->IsWorkItemScheduled = TRUE;
+                CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine encolado.");
+            } else {
+                CS_LOG_ERROR("Fallo al planificar el work item para la alerta de tampering.");
+                // WorkItem for alert (allocated with CS_ALLOCATE_POOL) is still in TamperAlertQueue
+                // It will be freed either by a subsequent successful scheduling or during unload.
+            }
         } else {
             if (context->IsWorkItemScheduled) {
                 CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine ya estaba planificado. Nuevo item añadido a la cola.");
