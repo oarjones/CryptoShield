@@ -19,6 +19,8 @@
 #include "..\Core\Detection/DetectionConfig.h" // Added
 #include "..\Core\Detection/TraditionalEngine.h" // Added
 #include "Protection/ServiceProtection.h" // Added for critical process protection
+#include "Protection/WindowsSecurityIntegration.h" // Para integración con WSC
+#include <iwscapi.h> // Para WSC_SECURITY_PRODUCT_STATE, aunque ya está en WindowsSecurityIntegration.h
 #include "ServiceLogging.h" // Added for shared Event Logging
 
  // Service name and display name
@@ -315,6 +317,11 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     UNREFERENCED_PARAMETER(lpParam);
     g_running = true;
 
+    // --- 0. WSC INTEGRATION OBJECT ---
+    // Declarar aquí para que su vida útil cubra toda la función,
+    // y su destructor pueda llamar a Unregister si es necesario al final.
+    std::unique_ptr<WindowsSecurityCenterIntegration> wscIntegration = nullptr;
+
     // --- 1. COMPONENT INITIALIZATION ---
 
     // Load configuration from "detection_config.json"
@@ -420,6 +427,56 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service is now fully operational and monitoring.");
 
+    // --- WINDOWS SECURITY CENTER INTEGRATION ---
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Initializing Windows Security Center integration...");
+    try {
+        wscIntegration = std::make_unique<WindowsSecurityCenterIntegration>();
+
+        HRESULT hr_register = wscIntegration->Register();
+        if (SUCCEEDED(hr_register)) {
+            if (hr_register == S_OK) {
+                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Successfully registered with Windows Security Center.");
+            } else { // S_FALSE
+                 WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product already registered with Windows Security Center. Will ensure state is ON.");
+            }
+            // Inmediatamente después del registro o si ya estaba registrado, actualizar/confirmar el estado a ON.
+            HRESULT hr_update = wscIntegration->UpdateState(WSC_SECURITY_PRODUCT_STATE_ON);
+            if (SUCCEEDED(hr_update)) {
+                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product state set/confirmed as ON in Windows Security Center.");
+            } else {
+                std::wstringstream ss;
+                ss << L"Failed to set product state to ON in Windows Security Center. HRESULT: 0x" << std::hex << hr_update;
+                WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+            }
+        } else {
+            std::wstringstream ss;
+            ss << L"Failed to register with Windows Security Center. HRESULT: 0x" << std::hex << hr_register;
+            WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+            // No se considera un error fatal que detenga el servicio.
+        }
+    } catch (const std::bad_alloc& ba) {
+        std::wstring ba_what_w;
+        // Convert char* to wstring if needed, or log directly if logger supports char*
+        // For simplicity, assuming WriteEventLog can take char* or ba.what() is simple enough.
+        // For now, just a generic message. A proper conversion would be:
+        // std::string narrow_what_ba = ba.what();
+        // ba_what_w.assign(narrow_what_ba.begin(), narrow_what_ba.end());
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to allocate WindowsSecurityCenterIntegration (bad_alloc).");
+    } catch (const _com_error& e) {
+        std::wstringstream ss;
+        ss << L"A COM error occurred during WSC integration: "
+           << (e.ErrorMessage() ? e.ErrorMessage() : L"Unknown COM error")
+           << L" HRESULT: 0x" << std::hex << e.Error();
+        WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+    } catch (const std::exception& e) {
+        std::string narrow_what = e.what();
+        std::wstring wide_what(narrow_what.begin(), narrow_what.end());
+        WriteEventLog(EVENTLOG_WARNING_TYPE, L"An exception occurred during WSC integration: " + wide_what);
+    } catch (...) {
+        WriteEventLog(EVENTLOG_WARNING_TYPE, L"An unknown error occurred during WSC integration initialization.");
+    }
+    // --- END WINDOWS SECURITY CENTER INTEGRATION ---
+
     // --- 3. WATCHDOG THREAD ---
     // The Watchdog thread needs SE_SHUTDOWN_NAME privilege to be able to initiate a system reboot.
     // This privilege should be acquired early, for example in ServiceMain or here.
@@ -474,6 +531,11 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     std::wstring final_msg = L"Final statistics - Total operations processed: " +
         std::to_wstring(final_stats.total_operations);
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, final_msg);
+
+    // El unique_ptr wscIntegration se destruirá aquí automáticamente.
+    // Su destructor llamará a Unregister() si CryptoShield se registró exitosamente
+    // y m_pServices todavía es válido. Esto asegura la limpieza si el servicio se detiene
+    // normalmente, en lugar de desinstalarse.
 
     return ERROR_SUCCESS;
 }
@@ -730,11 +792,71 @@ bool UninstallService()
     // Stop service if running
     SERVICE_STATUS status = { 0 };
     if (QueryServiceStatus(service, &status)) {
-        if (status.dwCurrentState != SERVICE_STOPPED) {
-            ControlService(service, SERVICE_CONTROL_STOP, &status);
-            Sleep(1000);
+        if (status.dwCurrentState != SERVICE_STOPPED &&
+            status.dwCurrentState != SERVICE_STOP_PENDING) { // Check for STOP_PENDING as well
+            WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service is running, attempting to stop it before uninstallation...");
+            std::wcout << L"Service is running, attempting to stop it..." << std::endl;
+            if (!ControlService(service, SERVICE_CONTROL_STOP, &status)) {
+                 WriteEventLog(EVENTLOG_WARNING_TYPE, L"Failed to send STOP control to service. Uninstallation might require reboot or manual stop.");
+                 std::wcerr << L"Failed to send STOP control to service. Error: " << GetLastError() << std::endl;
+            } else {
+                // Wait for the service to stop
+                int attempts = 0;
+                while (QueryServiceStatus(service, &status) && status.dwCurrentState != SERVICE_STOPPED && attempts < 30) { // Wait up to 30s
+                    Sleep(1000);
+                    attempts++;
+                }
+                if (status.dwCurrentState == SERVICE_STOPPED) {
+                    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service stopped successfully.");
+                    std::wcout << L"Service stopped successfully." << std::endl;
+                } else {
+                    WriteEventLog(EVENTLOG_WARNING_TYPE, L"Service did not stop in time. Uninstallation will proceed.");
+                    std::wcerr << L"Service did not stop in time. Current state: " << status.dwCurrentState << std::endl;
+                }
+            }
         }
     }
+
+    // --- UNREGISTER FROM WINDOWS SECURITY CENTER ---
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Attempting to unregister from Windows Security Center prior to service uninstallation...");
+    std::wcout << L"Attempting to unregister from Windows Security Center..." << std::endl;
+    try {
+        // Crear una instancia temporal para desregistrar.
+        // Su constructor inicializará COM, y su destructor desinicializará COM.
+        WindowsSecurityCenterIntegration wscIntegrationForUnreg;
+        HRESULT hr_unregister = wscIntegrationForUnreg.Unregister();
+        if (SUCCEEDED(hr_unregister)) {
+            if (hr_unregister == S_OK) { // S_OK significa que se desregistró activamente.
+                 WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Successfully unregistered from Windows Security Center.");
+                 std::wcout << L"Successfully unregistered from Windows Security Center." << std::endl;
+            } else { // S_FALSE (WBEM_S_FALSE o similar si Unregister devuelve eso para "no encontrado")
+                     // o si Unregister devuelve S_OK para "no encontrado" como está implementado actualmente.
+                 WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product was not found in Windows Security Center (already unregistered or never registered).");
+                 std::wcout << L"Product was not found in Windows Security Center (already unregistered or never registered)." << std::endl;
+            }
+        } else {
+            std::wstringstream ss;
+            ss << L"Failed to unregister from Windows Security Center. HRESULT: 0x" << std::hex << hr_unregister;
+            WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+            std::wcerr << L"Warning: " << ss.str() << std::endl;
+        }
+    } catch (const _com_error& e) {
+        std::wstringstream ss;
+        ss << L"A COM error occurred during WSC unregistration: "
+           << (e.ErrorMessage() ? e.ErrorMessage() : L"Unknown COM error")
+           << L" HRESULT: 0x" << std::hex << e.Error();
+        WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+        std::wcerr << L"Warning: " << ss.str() << std::endl;
+    } catch (const std::exception& e) {
+        std::string narrow_what = e.what();
+        std::wstring wide_what(narrow_what.begin(), narrow_what.end());
+        WriteEventLog(EVENTLOG_WARNING_TYPE, L"An exception occurred during WSC unregistration: " + wide_what);
+        std::wcerr << L"Warning: An exception occurred during WSC unregistration: " << wide_what << std::endl;
+    } catch (...) {
+        WriteEventLog(EVENTLOG_WARNING_TYPE, L"An unknown error occurred during WSC unregistration.");
+        std::wcerr << L"Warning: An unknown error occurred during WSC unregistration." << std::endl;
+    }
+    // --- END UNREGISTER FROM WINDOWS SECURITY CENTER ---
 
     bool success = DeleteService(service) != 0;
 
