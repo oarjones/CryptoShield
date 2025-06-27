@@ -20,6 +20,7 @@
 #include "..\Core\Detection/TraditionalEngine.h" // Added
 #include "Protection/ServiceProtection.h" // Added for critical process protection
 #include "Protection/WindowsSecurityIntegration.h" // Para integración con WSC
+#include "ResponseCoordinator.h" // <--- AÑADIDO PARA EL COORDINADOR DE RESPUESTAS
 #include <iwscapi.h> // Para WSC_SECURITY_PRODUCT_STATE, aunque ya está en WindowsSecurityIntegration.h
 #include "ServiceLogging.h" // Added for shared Event Logging
 
@@ -320,7 +321,8 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     // --- 0. WSC INTEGRATION OBJECT ---
     // Declarar aquí para que su vida útil cubra toda la función,
     // y su destructor pueda llamar a Unregister si es necesario al final.
-    std::unique_ptr<WindowsSecurityCenterIntegration> wscIntegration = nullptr;
+    std::unique_ptr<WindowsSecurityCenterIntegration> wsc_integration = nullptr; // Renombrado para claridad
+    std::unique_ptr<ResponseCoordinator> response_coordinator = nullptr; // Añadido
 
     // --- 1. COMPONENT INITIALIZATION ---
 
@@ -355,6 +357,32 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
     // Create the Communication Manager, passing the MessageProcessor instance
     auto communication_manager = std::make_unique<CryptoShield::CommunicationManager>(message_processor.get());
+
+    // Crear instancia de WindowsSecurityCenterIntegration (antes de ResponseCoordinator)
+    try {
+        wsc_integration = std::make_unique<WindowsSecurityCenterIntegration>();
+    } catch (const std::bad_alloc& ba) {
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to allocate WindowsSecurityCenterIntegration (bad_alloc) during component init. Service cannot start.");
+        return ERROR_SERVICE_SPECIFIC_ERROR; // Error fatal
+    } catch (...) { // Captura otras excepciones potenciales de construcción si WSCIntegration pudiera lanzarlas
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"An unknown error occurred during WindowsSecurityCenterIntegration creation. Service cannot start.");
+        return ERROR_SERVICE_SPECIFIC_ERROR; // Error fatal
+    }
+
+    // Crear instancia de ResponseCoordinator, pasando la referencia a wsc_integration
+    // Es importante que wsc_integration ya esté inicializado.
+    try {
+        response_coordinator = std::make_unique<ResponseCoordinator>(*wsc_integration);
+    } catch (const std::bad_alloc& ba) {
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to allocate ResponseCoordinator (bad_alloc). Service cannot start.");
+        // wsc_integration se limpiará automáticamente al salir del scope si esto falla.
+        return ERROR_SERVICE_SPECIFIC_ERROR;
+    } catch (...) {
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"An unknown error occurred during ResponseCoordinator creation. Service cannot start.");
+        return ERROR_SERVICE_SPECIFIC_ERROR;
+    }
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"ResponseCoordinator initialized successfully.");
+
 
     // --- 2. COMPONENT WIRING AND STARTUP ---
 
@@ -394,6 +422,22 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
         }
     );
 
+    // Registrar el callback de alertas críticas del kernel en MessageProcessor
+    // Se captura response_coordinator por puntero raw ya que su lifetime está gestionado por unique_ptr
+    // y se garantiza que sobrevive a message_processor si ServiceWorkerThread se ejecuta completamente.
+    if (message_processor && response_coordinator) { // Asegurarse de que ambos existen
+        message_processor->SetCriticalAlertCallback(
+            [rc = response_coordinator.get()](const CS_TAMPER_ALERT_PAYLOAD& alert) {
+                rc->HandleCriticalTamperAlert(alert);
+            }
+        );
+        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Critical alert callback registered with MessageProcessor.");
+    } else {
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to register critical alert callback: MessageProcessor or ResponseCoordinator is null.");
+        // Esto podría ser un error fatal dependiendo de la política.
+        // Por ahora, solo se registra el error.
+    }
+
     // Set callback for connection status changes
     communication_manager->SetConnectionCallback(
         [](bool connected) {
@@ -428,52 +472,48 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service is now fully operational and monitoring.");
 
     // --- WINDOWS SECURITY CENTER INTEGRATION ---
-    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Initializing Windows Security Center integration...");
-    try {
-        wscIntegration = std::make_unique<WindowsSecurityCenterIntegration>();
-
-        HRESULT hr_register = wscIntegration->Register();
-        if (SUCCEEDED(hr_register)) {
-            if (hr_register == S_OK) {
-                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Successfully registered with Windows Security Center.");
-            } else { // S_FALSE
-                 WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product already registered with Windows Security Center. Will ensure state is ON.");
-            }
-            // Inmediatamente después del registro o si ya estaba registrado, actualizar/confirmar el estado a ON.
-            HRESULT hr_update = wscIntegration->UpdateState(WSC_SECURITY_PRODUCT_STATE_ON);
-            if (SUCCEEDED(hr_update)) {
-                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product state set/confirmed as ON in Windows Security Center.");
+    // La inicialización de wsc_integration se movió más arriba, antes de ResponseCoordinator.
+    // Aquí solo se realiza el registro y la actualización de estado.
+    if (wsc_integration) { // Solo proceder si wsc_integration fue creado exitosamente
+        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Initializing Windows Security Center integration...");
+        try {
+            HRESULT hr_register = wsc_integration->Register();
+            if (SUCCEEDED(hr_register)) {
+                if (hr_register == S_OK) {
+                    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Successfully registered with Windows Security Center.");
+                } else { // S_FALSE
+                     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product already registered with Windows Security Center. Will ensure state is ON.");
+                }
+                // Inmediatamente después del registro o si ya estaba registrado, actualizar/confirmar el estado a ON.
+                HRESULT hr_update = wsc_integration->UpdateState(WSC_SECURITY_PRODUCT_STATE_ON);
+                if (SUCCEEDED(hr_update)) {
+                    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Product state set/confirmed as ON in Windows Security Center.");
+                } else {
+                    std::wstringstream ss;
+                    ss << L"Failed to set product state to ON in Windows Security Center. HRESULT: 0x" << std::hex << hr_update;
+                    WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+                }
             } else {
                 std::wstringstream ss;
-                ss << L"Failed to set product state to ON in Windows Security Center. HRESULT: 0x" << std::hex << hr_update;
+                ss << L"Failed to register with Windows Security Center. HRESULT: 0x" << std::hex << hr_register;
                 WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
+                // No se considera un error fatal que detenga el servicio.
             }
-        } else {
+        } catch (const _com_error& e) {
             std::wstringstream ss;
-            ss << L"Failed to register with Windows Security Center. HRESULT: 0x" << std::hex << hr_register;
+            ss << L"A COM error occurred during WSC integration: "
+               << (e.ErrorMessage() ? e.ErrorMessage() : L"Unknown COM error")
+               << L" HRESULT: 0x" << std::hex << e.Error();
             WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
-            // No se considera un error fatal que detenga el servicio.
+        } catch (const std::exception& e) {
+            std::string narrow_what = e.what();
+            std::wstring wide_what(narrow_what.begin(), narrow_what.end());
+            WriteEventLog(EVENTLOG_WARNING_TYPE, L"An exception occurred during WSC integration: " + wide_what);
+        } catch (...) {
+            WriteEventLog(EVENTLOG_WARNING_TYPE, L"An unknown error occurred during WSC integration initialization.");
         }
-    } catch (const std::bad_alloc& ba) {
-        std::wstring ba_what_w;
-        // Convert char* to wstring if needed, or log directly if logger supports char*
-        // For simplicity, assuming WriteEventLog can take char* or ba.what() is simple enough.
-        // For now, just a generic message. A proper conversion would be:
-        // std::string narrow_what_ba = ba.what();
-        // ba_what_w.assign(narrow_what_ba.begin(), narrow_what_ba.end());
-        WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to allocate WindowsSecurityCenterIntegration (bad_alloc).");
-    } catch (const _com_error& e) {
-        std::wstringstream ss;
-        ss << L"A COM error occurred during WSC integration: "
-           << (e.ErrorMessage() ? e.ErrorMessage() : L"Unknown COM error")
-           << L" HRESULT: 0x" << std::hex << e.Error();
-        WriteEventLog(EVENTLOG_WARNING_TYPE, ss.str());
-    } catch (const std::exception& e) {
-        std::string narrow_what = e.what();
-        std::wstring wide_what(narrow_what.begin(), narrow_what.end());
-        WriteEventLog(EVENTLOG_WARNING_TYPE, L"An exception occurred during WSC integration: " + wide_what);
-    } catch (...) {
-        WriteEventLog(EVENTLOG_WARNING_TYPE, L"An unknown error occurred during WSC integration initialization.");
+    } else {
+        WriteEventLog(EVENTLOG_WARNING_TYPE, L"Windows Security Center integration skipped as wsc_integration object is null.");
     }
     // --- END WINDOWS SECURITY CENTER INTEGRATION ---
 

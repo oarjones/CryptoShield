@@ -105,6 +105,11 @@ namespace CryptoShield {
             std::shared_ptr<Detection::TraditionalEngine> engine);
 
         /**
+         * @brief Alert callback type for critical kernel alerts
+         */
+        using CriticalAlertCallback = std::function<void(const CS_TAMPER_ALERT_PAYLOAD&)>;
+
+        /**
          * @brief Destructor
          */
         ~MessageProcessor();
@@ -172,6 +177,12 @@ namespace CryptoShield {
          * @param config New configuration
          */
         void UpdateConfiguration(const ProcessorConfig& config);
+
+        /**
+         * @brief Set critical alert callback
+         * @param callback Function to call for critical kernel alerts
+         */
+        void SetCriticalAlertCallback(CriticalAlertCallback callback);
 
         /**
          * @brief Clear operation history
@@ -286,6 +297,7 @@ namespace CryptoShield {
         // Alert handling
         std::mutex alert_mutex_;
         AlertCallback alert_callback_;
+        CriticalAlertCallback m_criticalAlertCallback; // Callback for critical kernel alerts
         std::vector<AlertInfo> recent_alerts_;
 
         // Logging

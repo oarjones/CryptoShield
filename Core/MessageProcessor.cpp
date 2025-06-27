@@ -216,6 +216,15 @@ void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& p
     // - Trigger a full system scan
     // - Shut down or restart critical services (or the machine itself if it's a severe compromise)
     // These actions would depend heavily on the overall architecture of CryptoShield.
+
+    // Invoca el callback si el servicio se ha registrado para recibir estas alertas
+    if (m_criticalAlertCallback) {
+        m_criticalAlertCallback(payload);
+    } else {
+        // Como fallback, si no hay callback, genera una alerta estándar
+        std::wstring description = L"FALLBACK: Alerta de Manipulación del Kernel Detectada. Tipo: " + std::to_wstring(payload.TamperType);
+        GenerateAlert(AlertSeverity::Critical, description, {});
+    }
 }
 
 		std::wcout << L"[MessageProcessor] Stopped" << std::endl;
@@ -854,6 +863,15 @@ void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& p
 	}
 
 	/**
+ * @brief Set critical alert callback
+ */
+void MessageProcessor::SetCriticalAlertCallback(CriticalAlertCallback callback)
+{
+	std::lock_guard<std::mutex> lock(alert_mutex_); // Reuse alert_mutex_ for simplicity or use a dedicated one if needed
+	m_criticalAlertCallback = callback;
+}
+
+/**
 	 * @brief Get current log filename
 	 */
 	std::wstring FileOperationLogger::GetLogFilename(const std::wstring& prefix)
