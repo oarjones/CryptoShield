@@ -141,12 +141,16 @@
   <ItemGroup>
     <ClInclude Include="CryptoShield.h" />
     <ClInclude Include="Protection\CallbackProtection.h" />
+    <ClInclude Include="Protection\HookDetection.h" />
+    <ClInclude Include="Protection\MemoryIntegrity.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Communication.c" />
     <ClCompile Include="CryptoShield.c" />
     <ClCompile Include="FileMonitor.c" />
     <ClCompile Include="Protection\CallbackProtection.c" />
+    <ClCompile Include="Protection\HookDetection.c" />
+    <ClCompile Include="Protection\MemoryIntegrity.c" />
     <ClCompile Include="Utilities.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -157,6 +157,8 @@
   <!-- </ItemGroup> -->
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Protection\ServiceProtection.cpp" />
+    <ClCompile Include="Protection\WindowsSecurityIntegration.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -165,6 +167,11 @@
     <ProjectReference Include="..\Core\CryptoShieldCore.vcxproj">
       <Project>{7bafc04c-ba23-4c7e-bb9f-0399a7fbbb82}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Protection\ServiceProtection.h" />
+    <ClInclude Include="Protection\WindowsSecurityIntegration.h" />
+    <ClInclude Include="ServiceLogging.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
