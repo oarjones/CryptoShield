@@ -1,0 +1,5 @@
+LIBRARY "CryptoShield.AMSIProvider"
+EXPORTS
+    DllRegisterServer   PRIVATE
+    DllUnregisterServer PRIVATE
+    DllGetClassObject   PRIVATE
