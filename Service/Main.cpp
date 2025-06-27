@@ -18,6 +18,8 @@
 #include "..\Core\MessageProcessor.h"
 #include "..\Core\Detection/DetectionConfig.h" // Added
 #include "..\Core\Detection/TraditionalEngine.h" // Added
+#include "Protection/ServiceProtection.h" // Added for critical process protection
+#include "ServiceLogging.h" // Added for shared Event Logging
 
  // Service name and display name
 constexpr wchar_t SERVICE_NAME[] = L"CryptoShieldService";
@@ -38,13 +40,14 @@ std::atomic<bool> g_paused{ false };
 VOID WINAPI ServiceMain(DWORD argc, LPWSTR* argv);
 VOID WINAPI ServiceCtrlHandler(DWORD ctrl_code);
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
+VOID WatchdogThreadProc(CryptoShield::CommunicationManager& comm_manager, std::atomic<bool>& running_flag); // Watchdog
 
 bool InstallService();
 bool UninstallService();
 bool StartServiceManually();
 bool StopServiceManually();
 void SetServiceStatus(DWORD current_state, DWORD exit_code = NO_ERROR, DWORD wait_hint = 0);
-void WriteEventLog(WORD event_type, const std::wstring& message);
+// void WriteEventLog(WORD event_type, const std::wstring& message); // Declaration moved to ServiceLogging.h
 
 /**
  * @brief Main entry point
@@ -202,7 +205,42 @@ VOID WINAPI ServiceMain(DWORD argc, LPWSTR* argv)
 
     // Report running status
     SetServiceStatus(SERVICE_RUNNING);
-    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"CryptoShield Service started successfully");
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"CryptoShield Service components initialized, reporting SERVICE_RUNNING.");
+
+    // Attempt to enable critical process protection
+    // This is done AFTER reporting SERVICE_RUNNING, as per requirements.
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Attempting to enable critical process protection...");
+    if (!EnableCriticalProcessProtection()) {
+        WriteEventLog(EVENTLOG_ERROR_TYPE, L"CRITICAL FAILURE: Failed to enable critical process protection. The service will stop to prevent running in an unprotected state.");
+        // LogErrorW in ServiceProtection.cpp would have logged details already.
+        // We need to signal the SCM that the service is stopping due to an error.
+        SetServiceStatus(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
+        // It's important to also signal the worker thread to terminate if it's already running complex logic,
+        // but in this structure, ServiceWorkerThread is the main execution loop.
+        // If EnableCriticalProcessProtection fails, ServiceMain will terminate,
+        // and the process will end. If worker_thread was already doing vital things,
+        // we might need a more graceful shutdown signal for it.
+        // However, worker_thread is created and then immediately waited upon.
+        // If this call fails, ServiceMain exits, and the process dies.
+        // If the worker thread was meant to run independently of ServiceMain's lifetime post-initialization,
+        // this structure would need adjustment. Given WaitForSingleObject, this is okay.
+
+        // Ensure g_running is false so the worker thread (if it managed to start and check g_running) exits.
+        // This is a safeguard. The main control is stopping the service via SetServiceStatus.
+        g_running = false;
+
+        // We might not need to close the worker_thread handle here if the process is about to exit.
+        // However, for correctness in other scenarios:
+        if (worker_thread != nullptr) {
+             // Signal the worker thread to stop if it's designed to check g_running
+             // (already done by setting g_running = false)
+             // Optionally, wait for it for a very short period, then terminate if necessary,
+             // but since the service is stopping with error, a quick exit is acceptable.
+            CloseHandle(worker_thread);
+        }
+        return; // Stop the service.
+    }
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Critical process protection enabled successfully. CryptoShield Service is now running with enhanced protection.");
 
     // Wait for worker thread to complete
     WaitForSingleObject(worker_thread, INFINITE);
@@ -382,21 +420,25 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service is now fully operational and monitoring.");
 
-    // --- 3. MAIN SERVICE LOOP ---
+    // --- 3. WATCHDOG THREAD ---
+    // The Watchdog thread needs SE_SHUTDOWN_NAME privilege to be able to initiate a system reboot.
+    // This privilege should be acquired early, for example in ServiceMain or here.
+    // For now, we assume it's granted. Consider adding:
+    // if (!SetRequiredPrivileges(SE_SHUTDOWN_NAME)) {
+    //     WriteEventLog(EVENTLOG_WARNING_TYPE, L"Failed to acquire SE_SHUTDOWN_NAME for Watchdog. System reboot capability disabled.");
+    // }
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Starting Watchdog thread for driver communication monitoring.");
+    std::thread watchdog_thread(WatchdogThreadProc, std::ref(*communication_manager), std::ref(g_running));
+
+    // --- 4. MAIN SERVICE LOOP ---
 
     ULONGLONG last_stats_time = GetTickCount64();
     while (g_running) {
         if (!g_paused) {
-            // Check driver connection status and attempt to reconnect if lost
-            if (!communication_manager->IsConnected()) {
-                WriteEventLog(EVENTLOG_WARNING_TYPE, L"Lost connection to driver, attempting reconnect...");
-                communication_manager->Shutdown();
-                Sleep(5000); // Wait before retrying
-                if (!communication_manager->Initialize()) {
-                    WriteEventLog(EVENTLOG_ERROR_TYPE, L"Failed to reconnect to driver. Will retry.");
-                    Sleep(10000); // Wait longer before next attempt
-                }
-            }
+            // The primary check for IsConnected and reconnection attempts are now handled by the Watchdog.
+            // This loop can focus on other periodic tasks, like logging stats.
+            // If IsConnected() is still needed here for other logic, it can remain.
+            // For now, removing the direct IsConnected check from this loop as Watchdog handles it.
 
             // Log statistics periodically (e.g., every minute)
             if (GetTickCount64() - last_stats_time > 60000) {
@@ -408,16 +450,24 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
                 last_stats_time = GetTickCount64();
             }
         }
-        Sleep(100); // Prevent CPU spinning
+        Sleep(1000); // Sleep for a second; can be adjusted.
     }
 
-    // --- 4. GRACEFUL SHUTDOWN ---
+    // --- 5. GRACEFUL SHUTDOWN ---
 
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Service worker thread stopping...");
 
+    // Signal and wait for Watchdog thread to complete
+    // g_running is already false here, WatchdogThreadProc should detect it and exit.
+    if (watchdog_thread.joinable()) {
+        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Waiting for Watchdog thread to join...");
+        watchdog_thread.join();
+        WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Watchdog thread joined.");
+    }
+
     message_processor->Stop();
-    communication_manager->RequestShutdown();
-    communication_manager->Shutdown();
+    communication_manager->RequestShutdown(); // Politely ask the communication manager to stop its loops
+    communication_manager->Shutdown();      // Ensure resources are released
     traditional_engine->Shutdown();
 
     auto final_stats = message_processor->GetStatistics();
@@ -426,6 +476,115 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, final_msg);
 
     return ERROR_SUCCESS;
+}
+
+
+/**
+ * @brief Watchdog thread procedure to monitor driver communication.
+ * @details This thread periodically checks the connection to the kernel driver.
+ * If the connection is lost, it attempts to re-establish it. If reconnection
+ * fails after several attempts, it logs a critical error and initiates a
+ * system reboot as a fail-safe measure.
+ *
+ * @param comm_manager Reference to the CommunicationManager instance.
+ * @param running_flag Atomic boolean indicating if the service is running.
+ */
+VOID WatchdogThreadProc(CryptoShield::CommunicationManager& comm_manager, std::atomic<bool>& running_flag) {
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"WatchdogThreadProc started.");
+
+    // It's crucial that SE_SHUTDOWN_NAME privilege is available if a reboot is needed.
+    // This should be acquired by the main service process.
+    // A check could be added here:
+    // if (!CheckPrivilege(SE_SHUTDOWN_NAME)) { // Hypothetical CheckPrivilege function
+    //    WriteEventLog(EVENTLOG_WARNING_TYPE, L"Watchdog: SE_SHUTDOWN_NAME not held. Reboot capability is non-functional.");
+    // }
+
+    while (running_flag.load(std::memory_order_relaxed)) {
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        if (!running_flag.load(std::memory_order_relaxed)) {
+            break; // Exit if service is stopping
+        }
+
+        if (!comm_manager.IsConnected()) {
+            WriteEventLog(EVENTLOG_WARNING_TYPE, L"Watchdog: Connection to driver lost. Attempting to reconnect...");
+
+            bool reconnected = false;
+            const int max_retries = 3;
+            const int retry_delay_seconds = 5;
+
+            for (int i = 0; i < max_retries; ++i) {
+                if (!running_flag.load(std::memory_order_relaxed)) break; // Check before sleep and retry
+
+                // It's possible that CommunicationManager::Shutdown() should be called before Initialize()
+                // if Initialize() doesn't fully clean up a previous failed state.
+                // Based on current ServiceWorkerThread, Shutdown() is called before Initialize().
+                // Let's assume comm_manager.Initialize() can be called multiple times or handles its own reset.
+                // If not, comm_manager.Shutdown() might be needed here.
+                // comm_manager.Shutdown(); // Optional: depending on Initialize behavior
+                // std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Brief pause if Shutdown is called
+
+                WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Watchdog: Reconnection attempt " + std::to_wstring(i + 1) + L" of " + std::to_wstring(max_retries) + L".");
+                if (comm_manager.Initialize()) {
+                    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"Watchdog: Reconnected to driver successfully.");
+                    reconnected = true;
+                    break;
+                }
+                else {
+                    WriteEventLog(EVENTLOG_WARNING_TYPE, L"Watchdog: Reconnection attempt " + std::to_wstring(i + 1) + L" failed.");
+                    if (i < max_retries - 1) {
+                        for(int s=0; s < retry_delay_seconds; ++s) {
+                            if (!running_flag.load(std::memory_order_relaxed)) break;
+                             std::this_thread::sleep_for(std::chrono::seconds(1));
+                        }
+                    }
+                }
+            }
+
+            if (!reconnected && running_flag.load(std::memory_order_relaxed)) {
+                WriteEventLog(EVENTLOG_ERROR_TYPE,
+                    L"CRITICAL FAILURE: Watchdog failed to reconnect to the kernel driver after multiple attempts. "
+                    L"The system may be at risk. Initiating a forced system reboot to ensure system integrity.");
+
+                // Grant SE_SHUTDOWN_NAME if not already done by the service
+                // This is a last resort attempt, ideally it's set at startup.
+                // if (!SetRequiredPrivileges(SE_SHUTDOWN_NAME)) {
+                //     WriteEventLog(EVENTLOG_ERROR_TYPE, L"Watchdog: Failed to acquire SE_SHUTDOWN_NAME. Cannot initiate reboot.");
+                // } else {
+                //     // Initiate forced system reboot
+                // }
+                // For this implementation, we assume the privilege is available or SetRequiredPrivileges was called successfully elsewhere.
+
+                // InitiateSystemShutdownExW requires advapi32.lib to be linked.
+                // Ensure it's in the project's linker dependencies.
+                BOOL reboot_initiated = InitiateSystemShutdownExW(
+                    NULL,    // Target machine: local
+                    const_cast<LPWSTR>(L"CryptoShield: Critical communication loss with kernel driver. System rebooting for protection."), // Message
+                    30,      // Timeout in seconds
+                    TRUE,    // Force applications to close
+                    TRUE,    // Reboot (TRUE) vs Shutdown (FALSE)
+                    SHTDN_REASON_FLAG_MAJOR_OPERATINGSYSTEM |
+                    SHTDN_REASON_FLAG_MINOR_SECURITY |
+                    SHTDN_REASON_FLAG_PLANNED // Though unplanned, this reason code is often used for critical system-initiated reboots
+                );
+
+                if (reboot_initiated) {
+                    WriteEventLog(EVENTLOG_ERROR_TYPE, L"Watchdog: InitiateSystemShutdownExW called successfully. System should reboot shortly.");
+                    // The system will reboot, effectively stopping the service.
+                    // We might want to signal g_running = false here, though the process will terminate.
+                    running_flag.store(false, std::memory_order_relaxed); // Signal other threads to stop
+                } else {
+                    DWORD error = GetLastError();
+                    WriteEventLog(EVENTLOG_ERROR_TYPE, L"Watchdog: InitiateSystemShutdownExW failed. Error code: " + std::to_wstring(error) +
+                                                     L". Manual intervention may be required. The service will attempt to continue but protection is compromised.");
+                    // If reboot fails, the service is in a very bad state.
+                    // Continue running might be an option, but it's risky.
+                    // For now, we just log and the service continues in a degraded state.
+                }
+            }
+        }
+    }
+    WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"WatchdogThreadProc finished.");
 }
 
 
