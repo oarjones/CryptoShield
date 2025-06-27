@@ -208,6 +208,7 @@ NTSTATUS MessageNotifyCallback(
 
 // ----- Tamper Alert Worker Thread Implementation -----
 
+
 /**
  * @brief Initializes the tamper alert worker thread and related synchronization objects.
  * @return NTSTATUS STATUS_SUCCESS if successful, otherwise an error code.
@@ -431,6 +432,8 @@ VOID TamperAlertThreadRoutine(_In_ PVOID StartContext)
     CS_LOG_INFO("Tamper alert worker thread exiting.");
     PsTerminateSystemThread(STATUS_SUCCESS);
 }
+
+
 
 /**
  * @brief Queues a tamper alert to be sent by the worker thread.

@@ -17,7 +17,7 @@
 #include <dontuse.h>
 #include <suppress.h>
 #include <ntstrsafe.h>    // Para RtlStringCchPrintfW y similares
-#include "Shared.h"       // Incluir las definiciones compartidas
+#include "../Common/Shared.h"
 
  // Driver identification (podrían ir en Shared.h si el servicio también necesita el nombre exacto)
 #define CRYPTOSHIELD_DRIVER_NAME_INTERNAL L"CryptoShield" // Nombre para logs, etc.

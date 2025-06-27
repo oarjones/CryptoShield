@@ -144,6 +144,7 @@
     <ClInclude Include="Protection\CallbackProtection.h" />
     <ClInclude Include="Protection\HookDetection.h" />
     <ClInclude Include="Protection\MemoryIntegrity.h" />
+    <ClInclude Include="Utilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Communication.c" />
