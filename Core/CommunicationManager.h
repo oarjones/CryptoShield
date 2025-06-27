@@ -1,13 +1,4 @@
-﻿#pragma once
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>      // Incluir ANTES de otras cabeceras
-#include <fltuser.h>
-
-#include "../Common/Shared.h"  
-
-
-/**
+﻿/**
  * @file CommunicationManager.h
  * @brief Driver communication management interface
  * @details Handles bidirectional communication with kernel driver
@@ -17,6 +8,9 @@
 
 #pragma once
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>      // Incluir ANTES de otras cabeceras
+#include <fltuser.h>
 #include <string>
 #include <thread>
 #include <atomic>
@@ -24,20 +18,20 @@
 #include <functional>
 #include <queue>
 #include <mutex>
-#include "MessageProcessor.h" // Include full definition
+#include "../Common/Shared.h"  
+//#include "MessageProcessor.h" // Include full definition
 
  // Link with filter manager library
 #pragma comment(lib, "fltlib.lib")
 
 namespace CryptoShield {
 
-    // Forward declarations
-    struct FileOperationInfo;
-    // class MessageProcessor; // No longer needed as full header is included
 
-    /**
-     * @brief File operation types matching kernel definitions
-     */
+    // 1. Declaración adelantada para romper el ciclo de includes.
+    class MessageProcessor;
+
+    // 2. Mueve la definición de FileOperationInfo y FileOperationType aquí,
+    //    ya que es la información que este manager produce.
     enum class FileOperationType : ULONG {
         Create = 1,
         Write = 2,
@@ -45,6 +39,19 @@ namespace CryptoShield {
         Rename = 4,
         SetInformation = 5
     };
+
+    struct FileOperationInfo {
+        FileOperationType type;
+        ULONG process_id;
+        ULONG thread_id;
+        std::wstring file_path;
+        std::wstring new_file_path; // Para operaciones de renombrado
+        FILETIME timestamp;
+
+        std::wstring GetOperationTypeString() const;
+        std::wstring GetFormattedTimestamp() const;
+    };
+
 
     /**
      * @brief Communication manager class
@@ -179,6 +186,16 @@ namespace CryptoShield {
          * @param error_code Windows error code
          */
         void LogError(const std::string& operation, DWORD error_code);
+
+        /**
+         * @brief Safely increments the messages received counter.
+         */
+        void IncrementMessagesReceivedStats();
+
+        /**
+         * @brief Safely increments the error counter.
+         */
+        void IncrementErrorStats();
 
     private:
         // Communication handles

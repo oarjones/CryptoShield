@@ -10,6 +10,7 @@
 #include <fltUser.h>
 #include "Shared.h"   // For CS_MESSAGE_PAYLOAD_HEADER, CS_FILE_OPERATION_PAYLOAD, etc.
 #include "CommunicationManager.h"
+#include "MessageProcessor.h" 
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -493,79 +494,37 @@ namespace CryptoShield {
 				}
 				case MSG_TYPE_TAMPER_DETECTED:
 				{
-					// Validate size for the specific payload: FILTER_MESSAGE_HEADER + CS_TAMPER_ALERT_PAYLOAD
-					if (bytes_transferred < (sizeof(FILTER_MESSAGE_HEADER) + sizeof(CS_TAMPER_ALERT_PAYLOAD))) {
+					// 1. Validar que el tamaño del mensaje recibido es suficiente para la estructura del payload.
+					const size_t min_expected_size = sizeof(FILTER_REPLY_HEADER) + sizeof(CS_TAMPER_ALERT_PAYLOAD);
+					if (bytes_transferred < min_expected_size) {
 						LogError("MessageThreadProc - Received message too small for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
-						continue; // Get next message
+						IncrementErrorStats(); // Incrementar contador de errores
+						continue; // Pasar al siguiente mensaje
 					}
 
+					// 2. Castear el puntero al tipo de payload correcto.
 					PCS_TAMPER_ALERT_PAYLOAD tamper_payload = reinterpret_cast<PCS_TAMPER_ALERT_PAYLOAD>(actual_crypto_payload_header);
 
-					// Further validation using PayloadSize from the header itself
-					if (bytes_transferred < (sizeof(FILTER_MESSAGE_HEADER) + tamper_payload->Header.PayloadSize)) {
-						LogError("MessageThreadProc - Received message smaller than specified PayloadSize for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
-						continue; // Get next message
-					}
-
-					// Call a method in MessageProcessor to handle this alert
-					// This requires CommunicationManager to have a pointer/reference to MessageProcessor
-					// Assuming such a link exists, e.g., m_message_processor_
-					// For now, let's assume a direct call if message_callback_ could be adapted or a new one introduced.
-					// For simplicity, if message_callback_ is meant for generic message data:
-					// current_message_callback(*tamper_payload); // This would require message_callback_ to handle various types.
-
-					// More realistically, CommunicationManager would delegate to MessageProcessor directly.
-					// This implies CommunicationManager needs a way to access MessageProcessor.
-					// Let's assume it's through a registered handler or a direct member.
-					// If we add a message_processor_ member to CommunicationManager:
-					if (message_processor_) { // Check if the processor is set
-						// Call the new method as per plan
-						message_processor_->ProcessKernelTamperAlert(*tamper_payload);
-					} else {
-						LogError("MessageThreadProc - MessageProcessor not set, cannot process tamper alert.", ERROR_INVALID_STATE);
-					}
-					// Tamper alerts do not expect a reply from user mode.
-					break;
-				}
-				case MSG_TYPE_TAMPER_DETECTED:
-				{
-					// Validate size for the specific payload: FILTER_MESSAGE_HEADER + CS_TAMPER_ALERT_PAYLOAD
-					// Note: actual_crypto_payload_header points to the CS_MESSAGE_PAYLOAD_HEADER part.
-					// The full message in buffer starts with PFILTER_MESSAGE_HEADER.
-					// bytes_transferred is the total size received from the driver.
-					const size_t min_expected_size_tamper = sizeof(FILTER_MESSAGE_HEADER) + sizeof(CS_TAMPER_ALERT_PAYLOAD);
-					if (bytes_transferred < min_expected_size_tamper) {
-						LogError("MessageThreadProc - Received message too small for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
-						IncrementErrorStats(); // Helper function to increment error count safely
-						continue;
-					}
-
-					PCS_TAMPER_ALERT_PAYLOAD tamper_payload = reinterpret_cast<PCS_TAMPER_ALERT_PAYLOAD>(actual_crypto_payload_header);
-
-					// Further validation using PayloadSize from the header itself.
-					// The driver sets PayloadSize to sizeof(CS_TAMPER_ALERT_PAYLOAD).
-					// So, total size should be at least FILTER_MESSAGE_HEADER + tamper_payload->Header.PayloadSize.
-					if (bytes_transferred < (sizeof(FILTER_MESSAGE_HEADER) + tamper_payload->Header.PayloadSize)) {
-						LogError("MessageThreadProc - Received message smaller than specified PayloadSize for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
-						IncrementErrorStats();
-						continue;
-					}
-
-					// Check for inconsistent payload size reported by driver vs struct size
+					// 3. Validación de consistencia: El tamaño que el driver dice que envió (PayloadSize)
+					//    debe coincidir con el tamaño que el servicio espera (sizeof).
+					//    Esto previene errores si hay diferentes versiones de Shared.h.
 					if (tamper_payload->Header.PayloadSize != sizeof(CS_TAMPER_ALERT_PAYLOAD)) {
-						LogError("MessageThreadProc - PayloadSize in CS_TAMPER_ALERT_PAYLOAD header does not match sizeof(CS_TAMPER_ALERT_PAYLOAD)", ERROR_INVALID_DATA);
+						LogError("MessageThreadProc - Mismatch in CS_TAMPER_ALERT_PAYLOAD size between driver and service.", ERROR_INVALID_DATA);
 						IncrementErrorStats();
 						continue;
 					}
 
-					if (message_processor_) {
+					// 4. Delegar el procesamiento de la alerta al MessageProcessor.
+					if (message_processor_) { // Usar la variable de miembro correcta si la has renombrado
 						message_processor_->ProcessKernelTamperAlert(*tamper_payload);
-						IncrementMessagesReceivedStats(); // Helper function
-					} else {
-						LogError("MessageThreadProc - MessageProcessor not set, cannot process tamper alert.", ERROR_INVALID_STATE);
+						IncrementMessagesReceivedStats(); // Incrementar contador de mensajes recibidos
+					}
+					else {
+						LogError("MessageThreadProc - MessageProcessor is not set. Cannot process tamper alert.", ERROR_INVALID_STATE);
 						IncrementErrorStats();
 					}
-					// Tamper alerts do not expect a reply to the driver.
+
+					// Las alertas de manipulación no requieren una respuesta al driver.
 					break;
 				}
 				default:

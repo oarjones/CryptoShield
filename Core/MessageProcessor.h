@@ -9,6 +9,8 @@
 #pragma once
 
 #include "CommunicationManager.h"
+#include "Detection/TraditionalEngine.h" 
+
 #include <queue>
 #include <mutex>
 #include <condition_variable>
@@ -20,7 +22,7 @@
 #include <vector>
 #include <fstream>
 #include <optional>
-#include "Detection/TraditionalEngine.h" 
+
 
 namespace CryptoShield {
 
