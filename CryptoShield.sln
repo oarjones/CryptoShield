@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Testing", "Testing\Testing.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CryptoShieldCore", "Core\CryptoShieldCore.vcxproj", "{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CryptoShield.AMSIProvider", "CryptoShield.AMSIProvider\CryptoShield.AMSIProvider.vcxproj", "{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -55,6 +57,14 @@ Global
 		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|ARM64.Build.0 = Release|x64
 		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|x64.ActiveCfg = Release|x64
 		{7BAFC04C-BA23-4C7E-BB9F-0399A7FBBB82}.Release|x64.Build.0 = Release|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Debug|ARM64.ActiveCfg = Debug|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Debug|ARM64.Build.0 = Debug|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Debug|x64.ActiveCfg = Debug|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Debug|x64.Build.0 = Debug|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Release|ARM64.ActiveCfg = Release|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Release|ARM64.Build.0 = Release|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Release|x64.ActiveCfg = Release|x64
+		{30C903ED-6BF3-49C7-9B03-45FF3DCE9928}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
