@@ -1,21 +1,12 @@
-/**
- * @file HookDetection.h
- * @brief Header file for SSDT and other hook detection mechanisms.
- *
- * @copyright Copyright (c) 2025 CryptoShield Project
- */
-
 #pragma once
 
-#include <ntifs.h> // For PVOID, BOOLEAN, etc.
-#include <wdm.h>   // For ZwQuerySystemInformation
+#ifndef _HOOK_DETECTION_H_
+#define _HOOK_DETECTION_H_
 
-// Define SYSTEM_MODULE_INFORMATION structures (if not already available through includes)
-// These are typically found in ntddk.h or undocumented headers. For safety, define them.
+#include "../CryptoShield.h" // Incluimos la cabecera principal
 
-#ifndef RTL_PROCESS_MODULES
-#define RTL_PROCESS_MODULES 24 // SystemModuleInformation
-
+// --- Estructuras para la obtención de módulos del sistema ---
+// Estas definiciones son necesarias para ZwQuerySystemInformation.
 typedef struct _RTL_PROCESS_MODULE_INFORMATION {
     HANDLE Section;
     PVOID MappedBase;
@@ -27,52 +18,24 @@ typedef struct _RTL_PROCESS_MODULE_INFORMATION {
     USHORT LoadCount;
     USHORT OffsetToFileName;
     UCHAR FullPathName[256];
-} RTL_PROCESS_MODULE_INFORMATION, *PRTL_PROCESS_MODULE_INFORMATION;
+} RTL_PROCESS_MODULE_INFORMATION, * PRTL_PROCESS_MODULE_INFORMATION;
 
 typedef struct _RTL_PROCESS_MODULES {
     ULONG NumberOfModules;
     RTL_PROCESS_MODULE_INFORMATION Modules[1];
-} RTL_PROCESS_MODULES, *PRTL_PROCESS_MODULES;
+} RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
 
-#endif // RTL_PROCESS_MODULES
-
-
-// Structure to hold ntoskrnl.exe's memory boundaries
+// --- Estructura para la información del módulo del kernel ---
 typedef struct _KERNEL_MODULE_INFO {
     PVOID BaseAddress;
     ULONG Size;
-} KERNEL_MODULE_INFO, *PKERNEL_MODULE_INFO;
+} KERNEL_MODULE_INFO, * PKERNEL_MODULE_INFO;
 
-extern KERNEL_MODULE_INFO g_NtoskrnlInfo; // Global to store ntoskrnl info
+extern KERNEL_MODULE_INFO g_NtoskrnlInfo;
 
-/**
- * @brief Retrieves the base address and size of ntoskrnl.exe.
- *
- * @param ModuleInfo Pointer to KERNEL_MODULE_INFO structure to be filled.
- * @return NTSTATUS Status of the operation. STATUS_SUCCESS on success.
- *
- * @note This function should be called at PASSIVE_LEVEL.
- */
-NTSTATUS GetNtoskrnlBoundaries(
-    _Out_ PKERNEL_MODULE_INFO ModuleInfo
-);
-
-/**
- * @brief Initializes SSDT related structures for hook detection.
- * @details Attempts to find KeServiceDescriptorTable. Should be called at PASSIVE_LEVEL.
- * @return NTSTATUS STATUS_SUCCESS if successful, otherwise an error code.
- */
+// --- Prototipos de Funciones ---
+NTSTATUS GetNtoskrnlBoundaries(_Out_ PKERNEL_MODULE_INFO ModuleInfo);
 NTSTATUS InitializeSdtTable(VOID);
+NTSTATUS IsSdtHooked(_Out_ PBOOLEAN IsHooked);
 
-/**
- * @brief Checks if the SSDT has been hooked.
- * @details Iterates through SSDT entries and checks if any service points outside ntoskrnl.exe.
- * @param IsHooked Pointer to a BOOLEAN that will receive TRUE if a hook is detected, FALSE otherwise.
- *                 This value is only valid if the function returns STATUS_SUCCESS.
- * @return NTSTATUS Status of the operation. STATUS_SUCCESS if the check was performed,
- *         or an error code if SSDT or ntoskrnl.exe boundaries could not be accessed/verified.
- * @warning This function should be called carefully, considering IRQL and SSDT access specifics.
- */
-NTSTATUS IsSdtHooked(
-    _Out_ PBOOLEAN IsHooked
-);
+#endif // _HOOK_DETECTION_H_

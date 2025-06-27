@@ -6,13 +6,12 @@
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
-#include "CryptoShield.h" // Incluye Shared.h indirectamente
-#include "Protection/CallbackProtection.h" // For callback protection functions
-#include "Protection/HookDetection.h"    // For GetNtoskrnlBoundaries, InitializeSdtTable
-#include "Protection/MemoryIntegrity.h"  // For InitializeMemoryIntegrity, CleanupMemoryIntegrity
-#include "Communication.h" // For communication port functions (ConnectNotifyCallback etc.)
-#include "Utilities.h"     // For IsFileSystemSupported
-
+#include "CryptoShield.h"
+#include "Communication.h"
+#include "Utilities.h"
+#include "Protection/CallbackProtection.h"
+#include "Protection/MemoryIntegrity.h"
+#include "Protection/HookDetection.h"
 // ----- Global Driver Context -----
 CRYPTOSHIELD_CONTEXT g_Context = { 0 };
 

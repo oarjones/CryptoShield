@@ -6,7 +6,125 @@
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
-#include "CryptoShield.h" // Incluye Shared.h
+#include "CryptoShield.h"
+#include "Communication.h" // Incluimos su propia cabecera
+
+ // Declaración adelantada de la rutina del hilo
+VOID TamperAlertThreadRoutine(PVOID StartContext);
+
+NTSTATUS InitializeTamperAlertThread(VOID)
+{
+    NTSTATUS status;
+    OBJECT_ATTRIBUTES objAttributes;
+
+    PAGED_CODE();
+
+    g_Context.TerminateTamperAlertThread = FALSE;
+    InitializeListHead(&g_Context.TamperAlertQueue);
+    KeInitializeSpinLock(&g_Context.TamperAlertQueueLock);
+    KeInitializeEvent(&g_Context.TamperAlertQueueEvent, SynchronizationEvent, FALSE);
+
+    InitializeObjectAttributes(&objAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+
+    status = PsCreateSystemThread(
+        &g_Context.TamperAlertThreadHandle,
+        (ACCESS_MASK)0, // Acceso completo al hilo
+        &objAttributes,
+        NULL,
+        NULL,
+        TamperAlertThreadRoutine,
+        NULL
+    );
+
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Fallo al crear el hilo de alertas: 0x%X", status);
+        g_Context.TamperAlertThreadHandle = NULL;
+        return status;
+    }
+
+    // Obtener un puntero al objeto del hilo para poder esperarlo en la descarga
+    status = ObReferenceObjectByHandle(
+        g_Context.TamperAlertThreadHandle,
+        THREAD_ALL_ACCESS,
+        *PsThreadType,
+        KernelMode,
+        (PVOID*)&g_Context.TamperAlertThreadObject,
+        NULL
+    );
+
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Fallo al obtener la referencia al objeto del hilo: 0x%X", status);
+        ZwClose(g_Context.TamperAlertThreadHandle);
+        g_Context.TamperAlertThreadHandle = NULL;
+    }
+
+    return status;
+}
+
+VOID TerminateTamperAlertThread(VOID)
+{
+    PAGED_CODE();
+
+    if (g_Context.TamperAlertThreadHandle != NULL) {
+        g_Context.TerminateTamperAlertThread = TRUE;
+        KeSetEvent(&g_Context.TamperAlertQueueEvent, IO_NO_INCREMENT, FALSE);
+
+        if (g_Context.TamperAlertThreadObject != NULL) {
+            KeWaitForSingleObject(g_Context.TamperAlertThreadObject, Executive, KernelMode, FALSE, NULL);
+            ObfDereferenceObject(g_Context.TamperAlertThreadObject);
+        }
+
+        ZwClose(g_Context.TamperAlertThreadHandle);
+        g_Context.TamperAlertThreadHandle = NULL;
+    }
+
+    // Limpieza final de la cola para evitar memory leaks
+    while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
+        PLIST_ENTRY listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
+        PTAMPER_ALERT_WORK_ITEM workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
+        ExFreePoolWithTag(workItem, CRYPTOSHIELD_POOL_TAG);
+    }
+}
+
+VOID TamperAlertThreadRoutine(PVOID StartContext)
+{
+    UNREFERENCED_PARAMETER(StartContext);
+
+    while (TRUE) {
+        // Esperar a que la DPC nos señale que hay trabajo
+        KeWaitForSingleObject(&g_Context.TamperAlertQueueEvent, Executive, KernelMode, FALSE, NULL);
+
+        // Comprobar si debemos terminar
+        if (g_Context.TerminateTamperAlertThread) {
+            PsTerminateSystemThread(STATUS_SUCCESS);
+        }
+
+        // Procesar todos los elementos de la cola
+        while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
+            PLIST_ENTRY listEntry;
+            PTAMPER_ALERT_WORK_ITEM workItem;
+            KIRQL oldIrql;
+
+            KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+            listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
+            KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+
+            if (listEntry) {
+                workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
+
+                // Enviar mensaje (ahora desde PASSIVE_LEVEL)
+                SendMessageToUserService(
+                    (PCS_MESSAGE_PAYLOAD_HEADER)&workItem->AlertPayload,
+                    sizeof(CS_TAMPER_ALERT_PAYLOAD),
+                    NULL, NULL
+                );
+
+                // Liberar la memoria del item
+                ExFreePoolWithTag(workItem, CRYPTOSHIELD_POOL_TAG);
+            }
+        }
+    }
+}
 
  // ----- Forward Declarations (para funciones internas de este archivo si se usan antes de definirlas) -----
 static NTSTATUS HandleStatusRequestMessage(
