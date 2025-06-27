@@ -519,7 +519,8 @@ namespace CryptoShield {
 					// Let's assume it's through a registered handler or a direct member.
 					// If we add a message_processor_ member to CommunicationManager:
 					if (message_processor_) { // Check if the processor is set
-						message_processor_->ProcessTamperAlert(*tamper_payload);
+						// Call the new method as per plan
+						message_processor_->ProcessKernelTamperAlert(*tamper_payload);
 					} else {
 						LogError("MessageThreadProc - MessageProcessor not set, cannot process tamper alert.", ERROR_INVALID_STATE);
 					}

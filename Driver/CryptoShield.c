@@ -407,42 +407,48 @@ NTSTATUS FilterUnloadCallback(
     // The work item itself runs and completes. We free g_Context.TamperAlertWorkItem here.
     // Any item *in the queue* needs to be drained and freed.
 
-    // Prevent new items from being queued and processed by ProcessTamperAlertQueueWorkRoutine
-    // by setting IsWorkItemScheduled to TRUE and holding the lock, or by a dedicated flag.
-    // For simplicity here, we'll focus on cleaning the queue and the IoWorkItem.
-    // A robust solution would involve IoUninitializeWorkItem or similar, or ensuring the work item callback
-    // handles the unload scenario gracefully.
+    // Prevent new items from being queued and processed by ProcessTamperAlertQueueWorkRoutine.
+    // Set IsUnloading early. This flag should be checked before queuing new work items.
+    InterlockedExchange8((CHAR*)&g_Context.IsUnloading, TRUE);
+    CS_LOG_TRACE("IsUnloading flag set to TRUE.");
 
     CS_LOG_TRACE("Cleaning up Tamper Alert Worker Thread resources...");
 
-    // 1. Free the IoWorkItem
+    // 1. Clean up any remaining items in the TamperAlertQueue
+    // This must be done carefully, acquiring the lock.
+    // The IsUnloading flag should prevent new items from being added by DPCs.
+    if (g_Context.TamperAlertQueueLock != NULL) { // Check if spinlock was initialized
+        KIRQL oldIrql;
+        KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+
+        while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
+            listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
+            workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
+            CS_LOG_INFO("Freeing queued tamper alert work item (Type: %u) during unload.", workItem->AlertPayload.TamperType);
+            CS_FREE_POOL(workItem);
+        }
+        // g_Context.IsWorkItemScheduled is not critical to reset here as the work item is being freed.
+        KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+        CS_LOG_TRACE("TamperAlertQueue drained.");
+    }
+
+
+    // 2. Free the IoWorkItem
+    // It's important to free the work item after ensuring the queue is empty and no more items
+    // will be processed that might reference this work item, although ProcessTamperAlertQueueWorkRoutine
+    // doesn't directly depend on g_Context.TamperAlertWorkItem for its execution parameters once scheduled.
+    // IoFreeWorkItem must be called when the work item is not currently queued and will not be queued again.
+    // The IsUnloading flag helps prevent re-queuing.
     if (g_Context.TamperAlertWorkItem != NULL) {
+        CS_LOG_TRACE("Freeing TamperAlertWorkItem.");
         IoFreeWorkItem(g_Context.TamperAlertWorkItem);
         g_Context.TamperAlertWorkItem = NULL;
     }
 
-    // 2. Clean up any remaining items in the TamperAlertQueue
-    // This must be done carefully, acquiring the lock.
-    // No new items should be added if IsUnloading is set and checked by IntegrityCheckDpcRoutine.
-    KeAcquireSpinLockAtDpcLevel(&g_Context.TamperAlertQueueLock); // Or KeAcquireSpinLock if at PASSIVE/APC
-                                                                 // FilterUnload is at PASSIVE_LEVEL, so KeAcquireSpinLock.
-    KIRQL oldIrql;
-    KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
-
-    while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
-        listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
-        workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
-        // Normally, we would log this or attempt to send a final batch,
-        // but at unload, it's usually best to just free resources.
-        CS_LOG_INFO("Freeing queued tamper alert work item during unload.");
-        CS_FREE_POOL(workItem); // Ensure CS_FREE_POOL uses the correct pool tag
-    }
-    // g_Context.IsWorkItemScheduled could be set to FALSE here, but it's less relevant during unload.
-    KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
-
     // Note: ShutdownTamperAlertThread() was removed as we are not using a dedicated thread anymore.
 
     // Indicar que el driver se está descargando para detener nuevas operaciones/mensajes.
+    // Moved IsUnloading setting to be earlier in this function.
     // This should ideally be set earlier to prevent new work items from being queued
     // by DPCs that might still run.
     InterlockedExchange8((CHAR*)&g_Context.IsUnloading, TRUE);
