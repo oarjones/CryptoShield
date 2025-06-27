@@ -8,10 +8,8 @@
 
 #pragma once
 
-
-#include "SharedCoreTypes.h"
-#include "Detection/TraditionalEngine.h" 
-
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>      // Incluir ANTES de otras cabeceras
 #include <queue>
 #include <mutex>
 #include <condition_variable>
@@ -23,6 +21,9 @@
 #include <vector>
 #include <fstream>
 #include <optional>
+#include "../Common/Shared.h"
+#include "SharedCoreTypes.h"
+#include "Detection/TraditionalEngine.h" 
 
 
 namespace CryptoShield {

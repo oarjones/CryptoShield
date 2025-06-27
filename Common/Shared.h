@@ -8,6 +8,12 @@
 
 #pragma once
 
+#ifdef __cplusplus
+ // El código de usuario (C++) no conoce el tipo NTSTATUS.
+ // Lo definimos como un LONG para que el compilador de C++ lo entienda,
+ // ya que funcionalmente son equivalentes para pasar valores.
+typedef long NTSTATUS;
+#endif
 
  // En C++, asegura que todas las declaraciones usen la convención de C para
  // evitar problemas de name-mangling al enlazar con el driver.

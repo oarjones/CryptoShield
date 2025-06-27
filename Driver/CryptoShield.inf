@@ -1,5 +1,5 @@
-Ôªø;
-; CryptoShield.inf (Versi√≥n Definitiva)
+;
+; CryptoShield.inf (VersiÛn Definitiva)
 ;
 
 [Version]
@@ -44,7 +44,7 @@ ServiceBinary    = %12%\CryptoShield.sys
 LoadOrderGroup   = "FSFilter Activity Monitor"
 
 [CryptoShield.Registry]
-; Usamos rutas absolutas (HKLM) para m√°xima compatibilidad y evitar errores de interpretaci√≥n.
+; Usamos rutas absolutas (HKLM) para m·xima compatibilidad y evitar errores de interpretaciÛn.
 HKLM,"SYSTEM\CurrentControlSet\Services\CryptoShield\Instances","DefaultInstance",0x00000000,%CryptoShield.DefaultInstanceName%
 HKLM,"SYSTEM\CurrentControlSet\Services\CryptoShield\Instances\%CryptoShield.DefaultInstanceName%","Altitude",0x00000000,"370010"
 HKLM,"SYSTEM\CurrentControlSet\Services\CryptoShield\Instances\%CryptoShield.DefaultInstanceName%","Flags",0x00010000,0x0

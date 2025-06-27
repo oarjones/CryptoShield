@@ -13,11 +13,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <psapi.h>
-#include <optional>
-#include <chrono> // Required for std::chrono functions
-#include <iomanip> // For std::put_time
-#include <sstream> // For std::wstringstream
-#include <Shared.h>
+
 
  // Helper function for timestamp formatting (if not already available in Utils)
 namespace { // Anonymous namespace for utility local to this file
@@ -148,7 +144,7 @@ namespace CryptoShield {
 	 * @brief Processes tamper alerts received from the kernel driver.
 	 * @param payload The tamper alert data from the driver.
 	 */
-	void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& payload) {
+	void CryptoShield::MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& payload) {
 		// Ensure thread-safety if multiple threads can call this, though typically
 		// CommunicationManager will call this from its single message receiving thread.
 		// For this example, assuming GenerateAlert and logging are thread-safe or called sequentially.
@@ -594,7 +590,7 @@ namespace CryptoShield {
 	/**
 	 * @brief Generate alert
 	 */
-	void MessageProcessor::GenerateAlert(AlertSeverity severity,
+	void CryptoShield::MessageProcessor::GenerateAlert(AlertSeverity severity,
 		const std::wstring& description,
 		const FileOperationInfo& operation)
 	{
@@ -633,7 +629,7 @@ namespace CryptoShield {
 	/**
 	 * @brief Log operation to file
 	 */
-	void MessageProcessor::LogOperation(const FileOperationInfo& operation)
+	void CryptoShield::MessageProcessor::LogOperation(const FileOperationInfo& operation)
 	{
 		std::lock_guard<std::mutex> lock(log_mutex_);
 
