@@ -166,6 +166,7 @@
     <ClInclude Include="Detection\SystemActivityMonitor.h" />
     <ClInclude Include="Detection\TraditionalEngine.h" />
     <ClInclude Include="MessageProcessor.h" />
+    <ClInclude Include="SharedCoreTypes.h" />
     <ClInclude Include="Utils\StringUtils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -179,6 +180,7 @@
     <ClCompile Include="Detection\SystemActivityMonitor.cpp" />
     <ClCompile Include="Detection\TraditionalEngine.cpp" />
     <ClCompile Include="MessageProcessor.cpp" />
+    <ClCompile Include="SharedCoreTypes.cpp" />
     <ClCompile Include="Utils\StringUtils.cpp" />
   </ItemGroup>
   <ItemGroup>

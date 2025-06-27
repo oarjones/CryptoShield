@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "CommunicationManager.h"
+
+#include "SharedCoreTypes.h"
 #include "Detection/TraditionalEngine.h" 
 
 #include <queue>

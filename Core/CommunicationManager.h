@@ -19,6 +19,7 @@
 #include <queue>
 #include <mutex>
 #include "../Common/Shared.h"  
+#include "SharedCoreTypes.h"
 //#include "MessageProcessor.h" // Include full definition
 
  // Link with filter manager library
@@ -28,29 +29,7 @@ namespace CryptoShield {
 
 
     // 1. Declaración adelantada para romper el ciclo de includes.
-    class MessageProcessor;
-
-    // 2. Mueve la definición de FileOperationInfo y FileOperationType aquí,
-    //    ya que es la información que este manager produce.
-    enum class FileOperationType : ULONG {
-        Create = 1,
-        Write = 2,
-        Delete = 3,
-        Rename = 4,
-        SetInformation = 5
-    };
-
-    struct FileOperationInfo {
-        FileOperationType type;
-        ULONG process_id;
-        ULONG thread_id;
-        std::wstring file_path;
-        std::wstring new_file_path; // Para operaciones de renombrado
-        FILETIME timestamp;
-
-        std::wstring GetOperationTypeString() const;
-        std::wstring GetFormattedTimestamp() const;
-    };
+    class MessageProcessor;    
 
 
     /**
@@ -225,28 +204,5 @@ namespace CryptoShield {
         MessageProcessor* message_processor_; // Pointer to the message processor instance
     };
 
-    /**
-     * @brief File operation information
-     * @details Parsed file operation data
-     */
-    struct FileOperationInfo {
-        FileOperationType type;
-        ULONG process_id;
-        ULONG thread_id;
-        //WCHAR file_path[MAX_FILE_PATH_CHARS]; // Changed from std::wstring
-        std::wstring file_path;
-        std::wstring new_file_path; // <-- AÑADE ESTE CAMPO
-        FILETIME timestamp;
-
-        /**
-         * @brief Get operation type as string
-         */
-        std::wstring GetOperationTypeString() const;
-
-        /**
-         * @brief Get formatted timestamp
-         */
-        std::wstring GetFormattedTimestamp() const;
-    };
 
 } // namespace CryptoShield

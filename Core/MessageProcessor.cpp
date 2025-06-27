@@ -17,18 +17,19 @@
 #include <chrono> // Required for std::chrono functions
 #include <iomanip> // For std::put_time
 #include <sstream> // For std::wstringstream
+#include <Shared.h>
 
-// Helper function for timestamp formatting (if not already available in Utils)
+ // Helper function for timestamp formatting (if not already available in Utils)
 namespace { // Anonymous namespace for utility local to this file
-    std::wstring FormatTimestamp(const std::chrono::system_clock::time_point& tp) {
-        std::time_t t = std::chrono::system_clock::to_time_t(tp);
-        std::tm tm_info;
-        localtime_s(&tm_info, &t); // Use localtime_s for safety
+	std::wstring FormatTimestamp(const std::chrono::system_clock::time_point& tp) {
+		std::time_t t = std::chrono::system_clock::to_time_t(tp);
+		std::tm tm_info;
+		localtime_s(&tm_info, &t); // Use localtime_s for safety
 
-        std::wstringstream wss;
-        wss << std::put_time(&tm_info, L"%Y-%m-%d %H:%M:%S");
-        return wss.str();
-    }
+		std::wstringstream wss;
+		wss << std::put_time(&tm_info, L"%Y-%m-%d %H:%M:%S");
+		return wss.str();
+	}
 } // anonymous namespace
 
 
@@ -141,91 +142,94 @@ namespace CryptoShield {
 				log_file_.close();
 			}
 		}
+	}
 
-/**
- * @brief Processes tamper alerts received from the kernel driver.
- * @param payload The tamper alert data from the driver.
- */
-void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& payload) {
-    // Ensure thread-safety if multiple threads can call this, though typically
-    // CommunicationManager will call this from its single message receiving thread.
-    // For this example, assuming GenerateAlert and logging are thread-safe or called sequentially.
+	/**
+	 * @brief Processes tamper alerts received from the kernel driver.
+	 * @param payload The tamper alert data from the driver.
+	 */
+	void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& payload) {
+		// Ensure thread-safety if multiple threads can call this, though typically
+		// CommunicationManager will call this from its single message receiving thread.
+		// For this example, assuming GenerateAlert and logging are thread-safe or called sequentially.
 
-    std::wstringstream log_entry_stream; // Renamed to avoid conflict with log_entry in other functions
-    log_entry_stream << L"[KERNEL TAMPER ALERT] Critical tamper detected by kernel driver!" << std::endl;
-    log_entry_stream << L"  Timestamp (Service Reception): " << FormatTimestamp(std::chrono::system_clock::now()) << std::endl;
-    log_entry_stream << L"  Message Type: 0x" << std::hex << payload.Header.MessageType << std::dec << std::endl;
-    log_entry_stream << L"  Tamper Type Code: " << payload.TamperType << std::endl;
+		std::wstringstream log_entry_stream; // Renamed to avoid conflict with log_entry in other functions
+		log_entry_stream << L"[KERNEL TAMPER ALERT] Critical tamper detected by kernel driver!" << std::endl;
+		log_entry_stream << L"  Timestamp (Service Reception): " << FormatTimestamp(std::chrono::system_clock::now()) << std::endl;
+		log_entry_stream << L"  Message Type: 0x" << std::hex << payload.Header.MessageType << std::dec << std::endl;
+		log_entry_stream << L"  Tamper Type Code: " << payload.TamperType << std::endl;
 
-    std::wstring tamper_type_str = L"Unknown Tamper Type";
-    // These should match defines in Driver/Protection/CallbackProtection.c
-    // #define TAMPER_TYPE_CALLBACK_TABLE_MODIFIED 1
-    // #define TAMPER_TYPE_DRIVER_MEMORY_MODIFIED  2
-    // #define TAMPER_TYPE_SSDT_HOOK_DETECTED      3
-    switch (payload.TamperType) {
-    case 1:
-        tamper_type_str = L"Callback Table Modified";
-        break;
-    case 2:
-        tamper_type_str = L"Driver Memory Modified";
-        break;
-    case 3:
-        tamper_type_str = L"SSDT Hook Detected";
-        break;
-        // Add more cases as defined in the kernel driver
-    }
-    log_entry_stream << L"  Description: " << tamper_type_str << std::endl;
+		std::wstring tamper_type_str = L"Unknown Tamper Type";
+		// These should match defines in Driver/Protection/CallbackProtection.c
+		// #define TAMPER_TYPE_CALLBACK_TABLE_MODIFIED 1
+		// #define TAMPER_TYPE_DRIVER_MEMORY_MODIFIED  2
+		// #define TAMPER_TYPE_SSDT_HOOK_DETECTED      3
+		switch (payload.TamperType) {
+		case 1:
+			tamper_type_str = L"Callback Table Modified";
+			break;
+		case 2:
+			tamper_type_str = L"Driver Memory Modified";
+			break;
+		case 3:
+			tamper_type_str = L"SSDT Hook Detected";
+			break;
+			// Add more cases as defined in the kernel driver
+		}
+		log_entry_stream << L"  Description: " << tamper_type_str << std::endl;
 
-    std::wstring formatted_log_entry = log_entry_stream.str();
+		std::wstring formatted_log_entry = log_entry_stream.str();
 
-    // Log to console/debug output for immediate visibility
-    OutputDebugStringW(formatted_log_entry.c_str());
-    std::wcout << formatted_log_entry; // If console is available
+		// Log to console/debug output for immediate visibility
+		OutputDebugStringW(formatted_log_entry.c_str());
+		std::wcout << formatted_log_entry; // If console is available
 
-    // Log to file (using existing logging mechanism or a dedicated one)
-    // Assuming LogOperation or a similar dedicated logging function handles file logging.
-    // For simplicity, direct file logging shown here as in original ProcessTamperAlert:
-    if (config_.enable_logging) { // Check if logging is enabled
-        std::lock_guard<std::mutex> log_lock(log_mutex_); // Ensure thread-safe file access
-        if (!OpenLogFile()) { // Ensure log file is open
-             std::wcerr << L"[MessageProcessor] Failed to open log file for kernel tamper alert." << std::endl;
-        } else {
-            log_file_ << L"--- KERNEL TAMPER ALERT ---" << std::endl;
-            log_file_ << formatted_log_entry;
-            log_file_ << L"--------------------------" << std::endl;
-            log_file_.flush();
-        }
-    }
+		// Log to file (using existing logging mechanism or a dedicated one)
+		// Assuming LogOperation or a similar dedicated logging function handles file logging.
+		// For simplicity, direct file logging shown here as in original ProcessTamperAlert:
+		if (config_.enable_logging) { // Check if logging is enabled
+			std::lock_guard<std::mutex> log_lock(log_mutex_); // Ensure thread-safe file access
+			if (!OpenLogFile()) { // Ensure log file is open
+				std::wcerr << L"[MessageProcessor] Failed to open log file for kernel tamper alert." << std::endl;
+			}
+			else {
+				log_file_ << L"--- KERNEL TAMPER ALERT ---" << std::endl;
+				log_file_ << formatted_log_entry;
+				log_file_ << L"--------------------------" << std::endl;
+				log_file_.flush();
+			}
+		}
 
-    // Construct AlertInfo for GenerateAlert
-    AlertInfo alert_info;
-    alert_info.severity = AlertSeverity::Critical; // Kernel tamper alerts are always critical
-    alert_info.description = L"Kernel Tamper Alert: " + tamper_type_str + L" (Type: " + std::to_wstring(payload.TamperType) + L")";
-    alert_info.process_id = 0; // Typically not associated with a specific user-mode process that *caused* it
-    alert_info.file_path = L"N/A"; // Not file-specific
-    alert_info.timestamp = std::chrono::steady_clock::now(); // Timestamp of processing in service
+		// Construct AlertInfo for GenerateAlert
+		AlertInfo alert_info;
+		alert_info.severity = AlertSeverity::Critical; // Kernel tamper alerts are always critical
+		alert_info.description = L"Kernel Tamper Alert: " + tamper_type_str + L" (Type: " + std::to_wstring(payload.TamperType) + L")";
+		alert_info.process_id = 0; // Typically not associated with a specific user-mode process that *caused* it
+		alert_info.file_path = L"N/A"; // Not file-specific
+		alert_info.timestamp = std::chrono::steady_clock::now(); // Timestamp of processing in service
 
-    // Call the existing GenerateAlert function
-    // GenerateAlert is responsible for calling alert_callback_ and other alert handling.
-    GenerateAlert(alert_info.severity, alert_info.description, FileOperationInfo{}); // Pass empty FileOperationInfo or adapt GenerateAlert
+		// Call the existing GenerateAlert function
+		// GenerateAlert is responsible for calling alert_callback_ and other alert handling.
+		GenerateAlert(alert_info.severity, alert_info.description, FileOperationInfo{}); // Pass empty FileOperationInfo or adapt GenerateAlert
 
 
-    // TODO: Implement further actions based on policy:
-    // - Notify administrator
-    // - Isolate the machine (if configured and capable)
-    // - Trigger a full system scan
-    // - Shut down or restart critical services (or the machine itself if it's a severe compromise)
-    // These actions would depend heavily on the overall architecture of CryptoShield.
+		// TODO: Implement further actions based on policy:
+		// - Notify administrator
+		// - Isolate the machine (if configured and capable)
+		// - Trigger a full system scan
+		// - Shut down or restart critical services (or the machine itself if it's a severe compromise)
+		// These actions would depend heavily on the overall architecture of CryptoShield.
 
-    // Invoca el callback si el servicio se ha registrado para recibir estas alertas
-    if (m_criticalAlertCallback) {
-        m_criticalAlertCallback(payload);
-    } else {
-        // Como fallback, si no hay callback, genera una alerta estándar
-        std::wstring description = L"FALLBACK: Alerta de Manipulación del Kernel Detectada. Tipo: " + std::to_wstring(payload.TamperType);
-        GenerateAlert(AlertSeverity::Critical, description, {});
-    }
-}
+		// Invoca el callback si el servicio se ha registrado para recibir estas alertas
+		if (m_criticalAlertCallback) {
+			m_criticalAlertCallback(payload);
+		}
+		else {
+			// Como fallback, si no hay callback, genera una alerta estándar
+			std::wstring description = L"FALLBACK: Alerta de Manipulación del Kernel Detectada. Tipo: " + std::to_wstring(payload.TamperType);
+			GenerateAlert(AlertSeverity::Critical, description, {});
+		}
+
 
 		std::wcout << L"[MessageProcessor] Stopped" << std::endl;
 	}
@@ -552,7 +556,7 @@ void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& p
 
 		// Cap at 100
 		return std::min(suspicion_level, 100UL);
-		
+
 	}
 
 	/**
@@ -865,15 +869,15 @@ void MessageProcessor::ProcessKernelTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& p
 	/**
  * @brief Set critical alert callback
  */
-void MessageProcessor::SetCriticalAlertCallback(CriticalAlertCallback callback)
-{
-	std::lock_guard<std::mutex> lock(alert_mutex_); // Reuse alert_mutex_ for simplicity or use a dedicated one if needed
-	m_criticalAlertCallback = callback;
-}
+	void MessageProcessor::SetCriticalAlertCallback(CriticalAlertCallback callback)
+	{
+		std::lock_guard<std::mutex> lock(alert_mutex_); // Reuse alert_mutex_ for simplicity or use a dedicated one if needed
+		m_criticalAlertCallback = callback;
+	}
 
-/**
-	 * @brief Get current log filename
-	 */
+	/**
+		 * @brief Get current log filename
+		 */
 	std::wstring FileOperationLogger::GetLogFilename(const std::wstring& prefix)
 	{
 		auto now = std::chrono::system_clock::now();

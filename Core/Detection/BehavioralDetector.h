@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "../CommunicationManager.h"
+#include "../SharedCoreTypes.h"
 #include "DetectionConfig.h" // Added
 #include <vector>
 #include <queue>

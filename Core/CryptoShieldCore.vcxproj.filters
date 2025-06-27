@@ -48,6 +48,9 @@
     <ClInclude Include="Utils\StringUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SharedCoreTypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CommunicationManager.cpp">
@@ -81,6 +84,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Utils\StringUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SharedCoreTypes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
