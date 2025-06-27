@@ -6,7 +6,10 @@
  * @copyright Copyright (c) 2025 CryptoShield Project
  */
 
-#include "CryptoShield.h" // Incluye Shared.h
+#include "CryptoShield.h"
+#include "Communication.h"
+#include "Utilities.h"
+#include "FileMonitor.h"
 
  // ----- Forward Declarations (si es necesario para funciones en este archivo) -----
  // (No parece necesario por ahora)

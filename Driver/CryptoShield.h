@@ -15,6 +15,7 @@
 
 // --- Definiciones Propias del Driver ---
 #define CRYPTOSHIELD_POOL_TAG 'SdSC' // Pool Tag para asignaciones de memoria
+#define MAX_CLIENT_CONNECTIONS 1
 
 // Macros de Logging
 #if DBG

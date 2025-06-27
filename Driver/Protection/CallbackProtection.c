@@ -11,6 +11,7 @@
 #include <ntddk.h> // Required for DPC, Timer, etc.
 #include "../CryptoShield.h" // Access to g_Context, CRYPTOSHIELD_POOL_TAG, CS_LOG_ERROR
 #include "CallbackProtection.h" // Function declarations for this file
+#include "../Communication.h" // <-- AÑADE ESTA LÍNEA
 #include "HookDetection.h"      // For IsSdtHooked()
 #include "MemoryIntegrity.h"    // For IsDriverMemoryIntact()
 
@@ -107,62 +108,9 @@ VOID IntegrityCheckDpcRoutine(
     }
 
     // If any tampering was detected, queue a work item to send the alert
-    if (isTampered) {
-        PTAMPER_ALERT_WORK_ITEM workItem;
-        KIRQL oldIrql;
-
-        // 1. Allocate memory for the work item (must be from NonPagedPool as DPC runs at DISPATCH_LEVEL)
-        workItem = (PTAMPER_ALERT_WORK_ITEM)CS_ALLOCATE_POOL(NonPagedPoolNx, sizeof(TAMPER_ALERT_WORK_ITEM));
-        if (workItem == NULL) {
-            CS_LOG_ERROR("No se pudo asignar memoria para el work item de alerta de tampering (Tipo: %lu).", tamperTypeDetected);
-            return; // Salir si no hay memoria
-        }
-
-        // 2. Rellenar el payload
-        RtlZeroMemory(&workItem->AlertPayload, sizeof(CS_TAMPER_ALERT_PAYLOAD)); // Initialize fully
-        workItem->AlertPayload.Header.MessageType = MSG_TYPE_TAMPER_DETECTED;
-        // PayloadSize should be the size of the *entire* CS_TAMPER_ALERT_PAYLOAD structure
-        workItem->AlertPayload.Header.PayloadSize = sizeof(CS_TAMPER_ALERT_PAYLOAD);
-        // MessageId can be zero or a sequence number if needed later
-        workItem->AlertPayload.Header.MessageId = 0;
-        workItem->AlertPayload.TamperType = tamperTypeDetected;
-        // Timestamp and other fields can be added to CS_TAMPER_ALERT_PAYLOAD if needed.
-
-        CS_LOG_INFO("Tampering detectado (Tipo: %lu). Encolando alerta para envío.", tamperTypeDetected);
-
-        // 3. Poner el trabajo en la cola de forma segura
-        KeAcquireSpinLock(&context->TamperAlertQueueLock, &oldIrql);
-        InsertTailList(&context->TamperAlertQueue, &workItem->ListEntry);
-
-        // 4. Planificar la ejecución del worker thread si no está ya planificado
-        //    y el driver no se está descargando.
-        if (!context->IsWorkItemScheduled && !context->IsUnloading) {
-            // The context parameter for IoQueueWorkItem is g_Context.TamperAlertWorkItem->DeviceObject,
-            // but ProcessTamperAlertQueueWorkRoutine doesn't use its PVOID Context argument.
-            // So we can pass NULL or any other context if needed by the routine in the future.
-            // The third parameter to IoQueueWorkItem is the WorkQueueType. DelayedWorkQueue is common.
-            // The fourth parameter is the actual context passed to ProcessTamperAlertQueueWorkRoutine.
-            if (IoQueueWorkItem(context->TamperAlertWorkItem,
-                            ProcessTamperAlertQueueWorkRoutine,
-                            DelayedWorkQueue, // Or CriticalWorkQueue if higher priority needed
-                            NULL) != NULL) { // Context for ProcessTamperAlertQueueWorkRoutine (can be NULL)
-                context->IsWorkItemScheduled = TRUE;
-                CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine encolado.");
-            } else {
-                CS_LOG_ERROR("Fallo al planificar el work item para la alerta de tampering.");
-                // WorkItem for alert (allocated with CS_ALLOCATE_POOL) is still in TamperAlertQueue
-                // It will be freed either by a subsequent successful scheduling or during unload.
-            }
-        } else {
-            if (context->IsWorkItemScheduled) {
-                CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine ya estaba planificado. Nuevo item añadido a la cola.");
-            }
-            if (context->IsUnloading) {
-                 CS_LOG_INFO("Driver descargándose, no se planifica nuevo work item de alerta, pero el item fue añadido a la cola (se limpiará en unload).");
-                 // El item se limpiará en FilterUnloadCallback.
-            }
-        }
-        KeReleaseSpinLock(&context->TamperAlertQueueLock, oldIrql);
+    if (isTampered) { // Ejemplo para el caso de memoria modificada
+        CS_LOG_ERROR("¡ALERTA DE TAMPERING! La memoria del driver ha sido modificada.");
+        QueueTamperAlert(2); // Usar un código numérico para el tipo de alerta
     }
 
     // Note: The DPC routine should complete as quickly as possible.

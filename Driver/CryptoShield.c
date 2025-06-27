@@ -9,6 +9,7 @@
 #include "CryptoShield.h"
 #include "Communication.h"
 #include "Utilities.h"
+#include "FileMonitor.h" // <-- Añadir si no está
 #include "Protection/CallbackProtection.h"
 #include "Protection/MemoryIntegrity.h"
 #include "Protection/HookDetection.h"

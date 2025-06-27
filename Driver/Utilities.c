@@ -132,6 +132,15 @@ BOOLEAN ShouldMonitorFileByPath(
     return TRUE; // Por defecto, monitorizar si no cae en una exclusión.
 }
 
+NTSTATUS GetNormalizedFileNameInformation(
+    _In_ PFLT_CALLBACK_DATA Data,
+    _Outptr_ PFLT_FILE_NAME_INFORMATION* FileNameInfo
+)
+{
+    PAGED_CODE();
+    return FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, FileNameInfo);
+}
+
 // Otras funciones de utilidad del código original (GetFileExtension, IsSystemProcess, etc.)
 // pueden permanecer aquí si son necesarias, ajustando su uso de memoria y cadenas.
 // Por ejemplo, DuplicateUnicodeString y FreeUnicodeString se pueden mantener si se necesitan
