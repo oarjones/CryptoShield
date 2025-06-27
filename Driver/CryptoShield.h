@@ -71,7 +71,22 @@ typedef struct _CRYPTOSHIELD_CONTEXT {
     PVOID DriverImageBase;          // Base address of the driver image
     ULONG DriverImageSize;          // Size of the driver image
     ULONG64 InitialDriverChecksum;  // Checksum of the driver image calculated at load time
+
+    // Tamper Alert Worker Thread
+    PETHREAD TamperAlertThreadObject; // Pointer to the worker thread object
+    HANDLE TamperAlertThreadHandle;   // Handle for the worker thread
+    KEVENT TamperAlertQueueEvent;     // Event to signal new items in the queue
+    LIST_ENTRY TamperAlertQueueHead;  // Head of the tamper alert queue
+    KSPIN_LOCK TamperAlertQueueLock;  // Spinlock to protect the queue
+    BOOLEAN TerminateTamperAlertThread; // Flag to signal thread termination
 } CRYPTOSHIELD_CONTEXT, * PCRYPTOSHIELD_CONTEXT;
+
+// Structure for items in the tamper alert queue
+typedef struct _TAMPER_ALERT_ITEM {
+    LIST_ENTRY ListEntry;
+    ULONG TamperType;
+    // Add other relevant data if needed for the alert
+} TAMPER_ALERT_ITEM, *PTAMPER_ALERT_ITEM;
 
 // Global driver context
 extern CRYPTOSHIELD_CONTEXT g_Context;
@@ -156,6 +171,12 @@ NTSTATUS SendMessageToUserService(
     _Out_opt_ PVOID ReplyBuffer,                   // Buffer para la respuesta del servicio (si se espera)
     _Inout_opt_ PULONG ReplyLength                 // Tamaño del buffer de respuesta / tamaño devuelto
 );
+
+// Tamper Alert Worker Thread functions (Communication.c or a new file like TamperAlert.c)
+NTSTATUS InitializeTamperAlertThread(VOID);
+VOID ShutdownTamperAlertThread(VOID);
+VOID TamperAlertThreadRoutine(_In_ PVOID StartContext);
+NTSTATUS QueueTamperAlert(_In_ ULONG TamperType);
 
 // Funciones de Monitoreo de Archivos (FileMonitor.c)
 NTSTATUS GetNormalizedFileNameInformation( // Renombrado de GetFileNameInformation

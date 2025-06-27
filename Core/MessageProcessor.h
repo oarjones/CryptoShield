@@ -178,6 +178,12 @@ namespace CryptoShield {
          */
         void ClearHistory();
 
+        /**
+         * @brief Process a tamper alert message received from the kernel driver.
+         * @param alert_payload The payload of the tamper alert message.
+         */
+        void ProcessTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& alert_payload);
+
     private:
         /**
          * @brief Processing thread procedure

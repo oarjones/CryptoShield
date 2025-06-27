@@ -297,9 +297,6 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
     }
     WriteEventLog(EVENTLOG_INFORMATION_TYPE, L"TraditionalEngine initialized successfully.");
 
-    // Create the Communication Manager to handle I/O with the driver
-    auto communication_manager = std::make_unique<CryptoShield::CommunicationManager>();
-
     // Configure and create the Message Processor, injecting the detection engine
     CryptoShield::ProcessorConfig processor_config;
     processor_config.enable_logging = engine_config.global.enable_logging;
@@ -311,12 +308,16 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
 
     auto message_processor = std::make_unique<CryptoShield::MessageProcessor>(processor_config, traditional_engine);
 
+    // Create the Communication Manager, passing the MessageProcessor instance
+    auto communication_manager = std::make_unique<CryptoShield::CommunicationManager>(message_processor.get());
+
     // --- 2. COMPONENT WIRING AND STARTUP ---
 
     // Set the callback for when the Communication Manager receives an operation from the driver
     communication_manager->SetMessageCallback(
-        [&message_processor](const CryptoShield::FileOperationInfo& operation) {
-            message_processor->EnqueueOperation(operation);
+        // Capture message_processor by raw pointer as its lifetime is managed by unique_ptr and outlives comm_manager here
+        [mp = message_processor.get()](const CryptoShield::FileOperationInfo& operation) {
+            mp->EnqueueOperation(operation);
         }
     );
 

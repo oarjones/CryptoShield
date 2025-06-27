@@ -206,6 +206,274 @@ NTSTATUS MessageNotifyCallback(
 }
 
 
+// ----- Tamper Alert Worker Thread Implementation -----
+
+/**
+ * @brief Initializes the tamper alert worker thread and related synchronization objects.
+ * @return NTSTATUS STATUS_SUCCESS if successful, otherwise an error code.
+ * @note This function should be called at PASSIVE_LEVEL, typically during DriverEntry.
+ */
+NTSTATUS InitializeTamperAlertThread(VOID)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    OBJECT_ATTRIBUTES objectAttributes;
+
+    PAGED_CODE();
+    CS_ASSERT_IRQL_PASSIVE();
+
+    CS_LOG_INFO("Initializing tamper alert worker thread.");
+
+    g_Context.TerminateTamperAlertThread = FALSE;
+    InitializeListHead(&g_Context.TamperAlertQueueHead);
+    KeInitializeSpinLock(&g_Context.TamperAlertQueueLock);
+    KeInitializeEvent(&g_Context.TamperAlertQueueEvent, NotificationEvent, FALSE); // Auto-resetting, initial state non-signaled
+
+    InitializeObjectAttributes(&objectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+
+    status = PsCreateSystemThread(
+        &g_Context.TamperAlertThreadHandle,
+        (ACCESS_MASK)THREAD_ALL_ACCESS, // THREAD_ALL_ACCESS might be too broad, consider specific rights
+        &objectAttributes,
+        NULL, // ProcessHandle (NULL for system process)
+        NULL, // ClientId
+        TamperAlertThreadRoutine,
+        NULL  // StartContext
+    );
+
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to create tamper alert worker thread. Status: 0x%08X", status);
+        g_Context.TamperAlertThreadHandle = NULL; // Ensure handle is NULL on failure
+        return status;
+    }
+
+    // Obtain the thread object pointer from the handle for later use (e.g., KeWaitForThread)
+    status = ObReferenceObjectByHandle(
+        g_Context.TamperAlertThreadHandle,
+        THREAD_ALL_ACCESS, // Required access for KeWaitForObject
+        *PsThreadType,    // Object type
+        KernelMode,       // Access mode
+        (PVOID*)&g_Context.TamperAlertThreadObject,
+        NULL              // HandleInformation
+    );
+
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to reference tamper alert worker thread object. Status: 0x%08X", status);
+        // Thread was created, but we can't get the object. This is problematic.
+        // Signal termination and wait for it to clean up.
+        g_Context.TerminateTamperAlertThread = TRUE;
+        KeSetEvent(&g_Context.TamperAlertQueueEvent, IO_NO_INCREMENT, FALSE); // Wake up the thread to terminate
+        if (g_Context.TamperAlertThreadHandle != NULL) {
+             // It's tricky to wait here if ObReferenceObjectByHandle failed.
+             // A robust solution might involve a more complex shutdown signal or simply closing the handle.
+             // For now, we'll close the handle and log. The thread might run briefly and exit.
+            ZwClose(g_Context.TamperAlertThreadHandle);
+            g_Context.TamperAlertThreadHandle = NULL;
+        }
+        g_Context.TamperAlertThreadObject = NULL;
+        return status;
+    }
+    // Do not close the handle here if ObReferenceObjectByHandle was successful,
+    // as we need it for ZwClose in ShutdownTamperAlertThread.
+    // The reference obtained by ObReferenceObjectByHandle needs to be dereferenced in Shutdown.
+
+    CS_LOG_INFO("Tamper alert worker thread created successfully. ThreadObject: %p, ThreadHandle: %p",
+        g_Context.TamperAlertThreadObject, g_Context.TamperAlertThreadHandle);
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @brief Shuts down the tamper alert worker thread.
+ * @details Signals the thread to terminate, waits for it, and cleans up resources.
+ * @note This function should be called at PASSIVE_LEVEL, typically during FilterUnloadCallback.
+ */
+VOID ShutdownTamperAlertThread(VOID)
+{
+    PTAMPER_ALERT_ITEM alertItem;
+    PLIST_ENTRY listEntry;
+    KIRQL oldIrql;
+
+    PAGED_CODE();
+    CS_ASSERT_IRQL_PASSIVE();
+
+    CS_LOG_INFO("Shutting down tamper alert worker thread.");
+
+    if (g_Context.TamperAlertThreadHandle == NULL && g_Context.TamperAlertThreadObject == NULL) {
+        CS_LOG_INFO("Tamper alert worker thread was not running or already shut down.");
+        return;
+    }
+
+    // Signal the thread to terminate
+    g_Context.TerminateTamperAlertThread = TRUE;
+    KeSetEvent(&g_Context.TamperAlertQueueEvent, IO_NO_INCREMENT, FALSE); // Wake up the thread if it's waiting
+
+    // Wait for the thread to terminate
+    if (g_Context.TamperAlertThreadObject != NULL) {
+        CS_LOG_INFO("Waiting for tamper alert worker thread to terminate...");
+        KeWaitForSingleObject(
+            g_Context.TamperAlertThreadObject,
+            Executive,          // Wait reason
+            KernelMode,         // Wait mode
+            FALSE,              // Alertable
+            NULL                // Timeout (NULL for indefinite wait)
+        );
+        CS_LOG_INFO("Tamper alert worker thread terminated.");
+        ObDereferenceObject(g_Context.TamperAlertThreadObject);
+        g_Context.TamperAlertThreadObject = NULL;
+    }
+
+    // Close the thread handle
+    if (g_Context.TamperAlertThreadHandle != NULL) {
+        ZwClose(g_Context.TamperAlertThreadHandle);
+        g_Context.TamperAlertThreadHandle = NULL;
+    }
+
+    // Clean up any remaining items in the queue
+    CS_LOG_INFO("Cleaning up remaining items in tamper alert queue...");
+    KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+    while (!IsListEmpty(&g_Context.TamperAlertQueueHead)) {
+        listEntry = RemoveHeadList(&g_Context.TamperAlertQueueHead);
+        alertItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_ITEM, ListEntry);
+        CS_LOG_INFO("Freeing queued tamper alert item (Type: %lu)", alertItem->TamperType);
+        CS_FREE_POOL(alertItem); // Assuming CRYPTOSHIELD_POOL_TAG is used
+    }
+    KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+    CS_LOG_INFO("Tamper alert queue cleanup complete.");
+}
+
+/**
+ * @brief Main routine for the tamper alert worker thread.
+ * @details Waits for tamper alerts in a queue and sends them to the user service.
+ * @param StartContext Not used.
+ */
+VOID TamperAlertThreadRoutine(_In_ PVOID StartContext)
+{
+    PLIST_ENTRY listEntry;
+    PTAMPER_ALERT_ITEM alertItem;
+    CS_TAMPER_ALERT_PAYLOAD tamperAlertPayload;
+    NTSTATUS status;
+    KIRQL oldIrql;
+
+    UNREFERENCED_PARAMETER(StartContext);
+    PAGED_CODE(); // This thread runs at PASSIVE_LEVEL.
+
+    CS_LOG_INFO("Tamper alert worker thread started.");
+
+    // Set thread priority if needed (e.g., KeSetPriorityThread)
+
+    while (TRUE) {
+        // Wait for an event indicating an item is in the queue or termination is requested
+        CS_LOG_TRACE("Tamper alert thread waiting for event.");
+        status = KeWaitForSingleObject(
+            &g_Context.TamperAlertQueueEvent,
+            Executive,
+            KernelMode,
+            FALSE,      // Not alertable
+            NULL        // No timeout, wait indefinitely
+        );
+
+        if (g_Context.TerminateTamperAlertThread) {
+            CS_LOG_INFO("Tamper alert worker thread received termination signal.");
+            break; // Exit the loop
+        }
+
+        if (!NT_SUCCESS(status) && status != STATUS_TIMEOUT) { // STATUS_TIMEOUT shouldn't happen with NULL timeout
+             CS_LOG_ERROR("KeWaitForSingleObject failed in tamper alert thread. Status: 0x%08X. Terminating thread.", status);
+             break;
+        }
+
+
+        // Process all items currently in the queue
+        while (TRUE) {
+            KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+            if (IsListEmpty(&g_Context.TamperAlertQueueHead)) {
+                KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+                break; // No more items
+            }
+            listEntry = RemoveHeadList(&g_Context.TamperAlertQueueHead);
+            KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+
+            alertItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_ITEM, ListEntry);
+
+            CS_LOG_INFO("Processing tamper alert from queue. Type: %lu", alertItem->TamperType);
+
+            // Prepare the payload
+            RtlZeroMemory(&tamperAlertPayload, sizeof(CS_TAMPER_ALERT_PAYLOAD));
+            tamperAlertPayload.Header.MessageType = MSG_TYPE_TAMPER_DETECTED;
+            tamperAlertPayload.Header.PayloadSize = sizeof(CS_TAMPER_ALERT_PAYLOAD);
+            // tamperAlertPayload.Header.MessageId = ...; // Optional: Generate a message ID
+            tamperAlertPayload.TamperType = alertItem->TamperType;
+
+            // Send the message to user service
+            // This function must be callable at PASSIVE_LEVEL
+            status = SendMessageToUserService(
+                (PCS_MESSAGE_PAYLOAD_HEADER)&tamperAlertPayload,
+                sizeof(CS_TAMPER_ALERT_PAYLOAD),
+                NULL,  // No reply expected for this alert
+                NULL
+            );
+
+            if (!NT_SUCCESS(status)) {
+                CS_LOG_WARNING("Failed to send tamper alert (Type: %lu) to user service. Status: 0x%08X",
+                               alertItem->TamperType, status);
+                // Depending on the error, might re-queue or log and drop.
+                // For now, log and drop.
+            } else {
+                CS_LOG_INFO("Tamper alert (Type: %lu) sent successfully to user service.", alertItem->TamperType);
+                InterlockedIncrement64(&g_Context.MessagesSentToUserMode);
+            }
+
+            // Free the alert item
+            CS_FREE_POOL(alertItem);
+        }
+    }
+
+    CS_LOG_INFO("Tamper alert worker thread exiting.");
+    PsTerminateSystemThread(STATUS_SUCCESS);
+}
+
+/**
+ * @brief Queues a tamper alert to be sent by the worker thread.
+ * @param TamperType An identifier for the type of tamper detected.
+ * @return NTSTATUS STATUS_SUCCESS if queued, or an error code (e.g., STATUS_INSUFFICIENT_RESOURCES).
+ * @note This function can be called from DPC level (or any IRQL <= DISPATCH_LEVEL).
+ */
+NTSTATUS QueueTamperAlert(_In_ ULONG TamperType)
+{
+    PTAMPER_ALERT_ITEM alertItem;
+    KIRQL oldIrql;
+
+    // CS_ASSERT_IRQL_DISPATCH_LEVEL_OR_BELOW(); // Caller can be DPC
+
+    if (g_Context.IsUnloading || g_Context.TerminateTamperAlertThread) {
+        CS_LOG_WARNING("Attempted to queue tamper alert while unloading or thread terminating. Type: %lu", TamperType);
+        return STATUS_SHUTDOWN_IN_PROGRESS;
+    }
+
+    // Allocate memory for the alert item. Must use NonPagedPool if called from DPC.
+    alertItem = (PTAMPER_ALERT_ITEM)CS_ALLOCATE_POOL(NonPagedPoolNx, sizeof(TAMPER_ALERT_ITEM));
+    if (alertItem == NULL) {
+        CS_LOG_ERROR("Failed to allocate memory for tamper alert item. TamperType: %lu", TamperType);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    alertItem->TamperType = TamperType;
+    // InitializeOtherFields(alertItem); // If other data is added to TAMPER_ALERT_ITEM
+
+    CS_LOG_TRACE("Queueing tamper alert. Type: %lu", TamperType);
+
+    // Add to the queue (protected by spinlock)
+    KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+    InsertTailList(&g_Context.TamperAlertQueueHead, &alertItem->ListEntry);
+    KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+
+    // Signal the worker thread that a new item is available
+    KeSetEvent(&g_Context.TamperAlertQueueEvent, IO_NO_INCREMENT, FALSE); // IO_NO_INCREMENT for potentially better performance
+
+    return STATUS_SUCCESS;
+}
+
+
 // ----- Funciones de Manejo de Mensajes Específicos -----
 
 static NTSTATUS HandleStatusRequestMessage(

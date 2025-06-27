@@ -22,13 +22,21 @@ namespace CryptoShield {
 	/**
 	 * @brief Constructor
 	 */
-	CommunicationManager::CommunicationManager()
+	CommunicationManager::CommunicationManager(MessageProcessor* processor)
 		: filter_port_(INVALID_HANDLE_VALUE)
 		, completion_port_(INVALID_HANDLE_VALUE)
 		, running_(false)
 		, connected_(false)
 		, statistics_{ 0, 0, 0, 0 }
+		, message_processor_(processor) // Initialize the MessageProcessor pointer
 	{
+		if (message_processor_ == nullptr) {
+			// This is a critical dependency for tamper alerts.
+			// Consider how to handle this - throw, log and disable alerts, etc.
+			// For now, log an error. The check in MessageThreadProc will prevent crashes.
+			LogError("CommunicationManager Ctor", ERROR_INVALID_PARAMETER); // Or a custom error
+			std::wcerr << L"[CommunicationManager] CRITICAL: MessageProcessor pointer is null during construction." << std::endl;
+		}
 	}
 
 	/**
@@ -481,6 +489,41 @@ namespace CryptoShield {
 					ProcessMessage(*file_op_payload); // This will cause a compile error until ProcessMessage is updated
 
 					// File operation notifications typically don't require a reply from this thread.
+					break;
+				}
+				case MSG_TYPE_TAMPER_DETECTED:
+				{
+					// Validate size for the specific payload: FILTER_MESSAGE_HEADER + CS_TAMPER_ALERT_PAYLOAD
+					if (bytes_transferred < (sizeof(FILTER_MESSAGE_HEADER) + sizeof(CS_TAMPER_ALERT_PAYLOAD))) {
+						LogError("MessageThreadProc - Received message too small for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
+						continue; // Get next message
+					}
+
+					PCS_TAMPER_ALERT_PAYLOAD tamper_payload = reinterpret_cast<PCS_TAMPER_ALERT_PAYLOAD>(actual_crypto_payload_header);
+
+					// Further validation using PayloadSize from the header itself
+					if (bytes_transferred < (sizeof(FILTER_MESSAGE_HEADER) + tamper_payload->Header.PayloadSize)) {
+						LogError("MessageThreadProc - Received message smaller than specified PayloadSize for CS_TAMPER_ALERT_PAYLOAD", ERROR_INVALID_DATA);
+						continue; // Get next message
+					}
+
+					// Call a method in MessageProcessor to handle this alert
+					// This requires CommunicationManager to have a pointer/reference to MessageProcessor
+					// Assuming such a link exists, e.g., m_message_processor_
+					// For now, let's assume a direct call if message_callback_ could be adapted or a new one introduced.
+					// For simplicity, if message_callback_ is meant for generic message data:
+					// current_message_callback(*tamper_payload); // This would require message_callback_ to handle various types.
+
+					// More realistically, CommunicationManager would delegate to MessageProcessor directly.
+					// This implies CommunicationManager needs a way to access MessageProcessor.
+					// Let's assume it's through a registered handler or a direct member.
+					// If we add a message_processor_ member to CommunicationManager:
+					if (message_processor_) { // Check if the processor is set
+						message_processor_->ProcessTamperAlert(*tamper_payload);
+					} else {
+						LogError("MessageThreadProc - MessageProcessor not set, cannot process tamper alert.", ERROR_INVALID_STATE);
+					}
+					// Tamper alerts do not expect a reply from user mode.
 					break;
 				}
 				default:

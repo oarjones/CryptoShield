@@ -267,21 +267,46 @@ NTSTATUS DriverEntry(
     status = InitializeMemoryIntegrity(DriverObject);
     if (!NT_SUCCESS(status)) {
         CS_LOG_ERROR("Failed to initialize memory integrity protection: 0x%08X", status);
-        // This is a critical self-protection feature. Fail driver load.
-        CleanupCallbackProtection();
-        // Note: InitializeSdtTable doesn't have a dedicated cleanup, g_KeServiceDescriptorTable is just nulled on error.
-        // g_NtoskrnlInfo also doesn't allocate resources that need explicit cleanup here.
-        FltStopFiltering(g_Context.FilterHandle);
-        FltCloseCommunicationPort(g_Context.ServerPort);
-        g_Context.ServerPort = NULL;
-        FltUnregisterFilter(g_Context.FilterHandle);
-        g_Context.FilterHandle = NULL;
-        ExDeleteResourceLite(&g_Context.PortResource);
-        return status;
+        // Critical failure
+        CleanupCallbackProtection(); // Clean up previous
+        // GetNtoskrnlBoundaries and InitializeSdtTable don't have specific cleanup functions here.
+        goto ExitDriverEntry_ClosePortAndUnregister;
     }
 
-    CS_LOG_INFO("CryptoShield driver loaded successfully with all protection mechanisms initialized.");
+    // Initialize the Tamper Alert Worker Thread
+    CS_LOG_TRACE("Initializing tamper alert worker thread...");
+    status = InitializeTamperAlertThread();
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to initialize tamper alert worker thread: 0x%08X", status);
+        // Critical failure
+        CleanupMemoryIntegrity();    // Clean up previous
+        CleanupCallbackProtection(); // Clean up previous
+        goto ExitDriverEntry_ClosePortAndUnregister;
+    }
+
+    // All critical initializations are successful. Now start filtering.
+    CS_LOG_TRACE("Starting filtering I/O operations...");
+    status = FltStartFiltering(g_Context.FilterHandle);
+    if (!NT_SUCCESS(status)) {
+        CS_LOG_ERROR("Failed to start filtering: 0x%08X", status);
+        ShutdownTamperAlertThread(); // Clean up tamper thread
+        CleanupMemoryIntegrity();
+        CleanupCallbackProtection();
+        goto ExitDriverEntry_ClosePortAndUnregister;
+    }
+
+    CS_LOG_INFO("CryptoShield driver loaded successfully. All protection mechanisms initialized and filtering started.");
     return STATUS_SUCCESS;
+
+    // Centralized cleanup for failures after port creation and filter registration
+ExitDriverEntry_ClosePortAndUnregister:
+    CS_LOG_INFO("Cleaning up communication port and filter registration due to critical initialization failure.");
+    FltCloseCommunicationPort(g_Context.ServerPort);
+    g_Context.ServerPort = NULL;
+    FltUnregisterFilter(g_Context.FilterHandle);
+    g_Context.FilterHandle = NULL;
+    ExDeleteResourceLite(&g_Context.PortResource);
+    return status; // Return the specific error status
 }
 
 
@@ -305,8 +330,14 @@ NTSTATUS FilterUnloadCallback(
     // Clean up callback protection
     CleanupCallbackProtection();
 
+    // Shut down the tamper alert worker thread
+    // This should be done before closing the communication port or unregistering the filter,
+    // as the thread uses these resources (indirectly via SendMessageToUserService).
+    CS_LOG_TRACE("Shutting down tamper alert worker thread...");
+    ShutdownTamperAlertThread();
+
     // Indicar que el driver se está descargando para detener nuevas operaciones/mensajes.
-    InterlockedExchange8((CHAR*)&g_Context.IsUnloading, TRUE);
+    InterlockedExchange8((CHAR*)&g_Context.IsUnloading, TRUE); // Set this before closing ports to stop new messages
 
     // Cerrar el puerto de comunicación del servidor.
     // Esto evitará nuevas conexiones y debería hacer que FltSendMessage falle para los clientes.

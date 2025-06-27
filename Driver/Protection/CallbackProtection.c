@@ -24,6 +24,11 @@ extern CONST FLT_OPERATION_REGISTRATION Callbacks[];
 // Relative time for KeSetTimer: negative value in 100-nanosecond units.
 #define INTEGRITY_TIMER_DUE_TIME_100NS (-1 * INTEGRITY_CHECK_INTERVAL_SECONDS * 10 * 1000 * 1000)
 
+// Tamper types specific to integrity checks
+#define TAMPER_TYPE_CALLBACK_TABLE_MODIFIED 1
+#define TAMPER_TYPE_DRIVER_MEMORY_MODIFIED 2
+#define TAMPER_TYPE_SSDT_HOOK_DETECTED 3
+
 
 /**
  * @brief DPC routine to periodically check the integrity of the callback table.
@@ -59,26 +64,31 @@ VOID IntegrityCheckDpcRoutine(
 
     if (comparisonResult != context->CallbackTableSize) {
         CS_LOG_ERROR("¡ALERTA DE TAMPERING! La tabla de callbacks del driver ha sido modificada.");
-        // Future: Trigger more actions (e.g., notify user-mode, attempt restoration if safe).
+        QueueTamperAlert(TAMPER_TYPE_CALLBACK_TABLE_MODIFIED);
+        // Future: Attempt restoration if safe and configured.
     }
 
     NTSTATUS integrityStatus;
-    BOOLEAN isTampered; // For IsDriverMemoryIntact, isTampered is !isIntact. For IsSdtHooked, isTampered is IsHooked.
+    BOOLEAN isIntact; // For IsDriverMemoryIntact, TRUE means intact.
+    BOOLEAN isHooked; // For IsSdtHooked, TRUE means a hook is detected.
 
     // Check for driver memory modification
-    integrityStatus = IsDriverMemoryIntact(&isTampered); // Here, isTampered means memory IS intact if TRUE
+    // IsDriverMemoryIntact now returns TRUE in isIntact if memory is NOT modified.
+    integrityStatus = IsDriverMemoryIntact(&isIntact);
     if (!NT_SUCCESS(integrityStatus)) {
         CS_LOG_ERROR("No se pudo verificar la integridad de la memoria del driver. Status: 0x%X", integrityStatus);
-    } else if (!isTampered) { // If IsDriverMemoryIntact returns TRUE for isTampered, it means intact. So !isTampered means tampered.
+    } else if (!isIntact) { // If memory is NOT intact (modified)
         CS_LOG_ERROR("¡ALERTA DE TAMPERING! La memoria del driver ha sido modificada.");
+        QueueTamperAlert(TAMPER_TYPE_DRIVER_MEMORY_MODIFIED);
     }
 
     // Check for SSDT hooks
-    integrityStatus = IsSdtHooked(&isTampered); // Here, isTampered means a hook IS detected if TRUE
+    integrityStatus = IsSdtHooked(&isHooked);
     if (!NT_SUCCESS(integrityStatus)) {
         CS_LOG_ERROR("No se pudo verificar la SSDT en busca de hooks. Status: 0x%X", integrityStatus);
-    } else if (isTampered) { // If IsSdtHooked returns TRUE for isTampered, it means a hook was detected.
+    } else if (isHooked) { // If a hook IS detected
         CS_LOG_ERROR("¡ALERTA DE TAMPERING! Se ha detectado un hook en la SSDT.");
+        QueueTamperAlert(TAMPER_TYPE_SSDT_HOOK_DETECTED);
     }
 
     // Note: The DPC routine should complete as quickly as possible.

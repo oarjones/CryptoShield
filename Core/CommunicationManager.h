@@ -24,6 +24,7 @@
 #include <functional>
 #include <queue>
 #include <mutex>
+#include "MessageProcessor.h" // Include full definition
 
  // Link with filter manager library
 #pragma comment(lib, "fltlib.lib")
@@ -32,7 +33,7 @@ namespace CryptoShield {
 
     // Forward declarations
     struct FileOperationInfo;
-    class MessageProcessor;
+    // class MessageProcessor; // No longer needed as full header is included
 
     /**
      * @brief File operation types matching kernel definitions
@@ -63,8 +64,9 @@ namespace CryptoShield {
 
         /**
          * @brief Constructor
+         * @param processor Pointer to the MessageProcessor instance for alert delegation.
          */
-        CommunicationManager();
+        explicit CommunicationManager(MessageProcessor* processor);
 
         /**
          * @brief Destructor
@@ -201,6 +203,9 @@ namespace CryptoShield {
         std::wstring port_name_;
         static constexpr DWORD MESSAGE_BUFFER_SIZE = 8192;
         static constexpr DWORD MAX_THREAD_COUNT = 2;
+
+        // Message Processor for alerts
+        MessageProcessor* message_processor_; // Pointer to the message processor instance
     };
 
     /**

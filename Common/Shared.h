@@ -40,6 +40,7 @@ extern "C" {
 #define MSG_TYPE_SHUTDOWN_REQUEST   (MSG_TYPE_BASE + 4) // Del código original
 #define MSG_TYPE_ALERT              (MSG_TYPE_BASE + 5) // Del código original
 #define MSG_TYPE_THREAT_DETECTED    (MSG_TYPE_BASE + 6) // Del código original
+#define MSG_TYPE_TAMPER_DETECTED    (MSG_TYPE_BASE + 7) // Nueva alerta de manipulación
 // Añadir MSG_TYPE_STATUS_REPLY y MSG_TYPE_CONFIG_REPLY si el servicio espera una respuesta específica con estos tipos.
 
 // File operation types (del código original, el documento no los detalla tanto)
@@ -122,6 +123,16 @@ typedef struct _CS_MESSAGE_PAYLOAD_HEADER {
     ULONG MessageId;            // Identificador único de mensaje (opcional, para correlación).
     ULONG PayloadSize;          // Tamaño total de este payload, incluyendo esta cabecera.
 } CS_MESSAGE_PAYLOAD_HEADER, * PCS_MESSAGE_PAYLOAD_HEADER;
+
+
+/**
+ * @brief Payload for tamper detected alert (Kernel -> Usuario).
+ * Usado para notificar manipulaciones críticas detectadas por el driver.
+ */
+typedef struct _CS_TAMPER_ALERT_PAYLOAD {
+    CS_MESSAGE_PAYLOAD_HEADER Header; /**< Encabezado del mensaje. MessageType será MSG_TYPE_TAMPER_DETECTED. */
+    ULONG TamperType;                 /**< Un código que identifica el tipo de manipulación detectada (ej. 1=Callback, 2=SSDT_Hook). */
+} CS_TAMPER_ALERT_PAYLOAD, *PCS_TAMPER_ALERT_PAYLOAD;
 
 
 /**

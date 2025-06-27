@@ -126,6 +126,86 @@ namespace CryptoShield {
 			}
 		}
 
+void MessageProcessor::ProcessTamperAlert(const CS_TAMPER_ALERT_PAYLOAD& alert_payload) {
+    // Ensure thread-safety if multiple threads can call this, though typically
+    // CommunicationManager will call this from its single message receiving thread.
+    // std::lock_guard<std::mutex> lock(alert_mutex_); // Or a specific mutex for tamper alerts
+
+    std::wstringstream log_entry;
+    log_entry << L"[TAMPER ALERT] Critical tamper detected by kernel driver!" << std::endl;
+    log_entry << L"  Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count() << std::endl;
+    log_entry << L"  Message Type: 0x" << std::hex << alert_payload.Header.MessageType << std::dec << std::endl;
+    log_entry << L"  Tamper Type Code: " << alert_payload.TamperType << std::endl;
+
+    // Interpret TamperType (these codes should align with kernel-side definitions)
+    // Example:
+    // #define TAMPER_TYPE_CALLBACK_TABLE_MODIFIED 1 (from CallbackProtection.c)
+    // #define TAMPER_TYPE_DRIVER_MEMORY_MODIFIED  2 (from CallbackProtection.c)
+    // #define TAMPER_TYPE_SSDT_HOOK_DETECTED      3 (from CallbackProtection.c)
+    std::wstring tamper_description = L"Unknown Tamper Type";
+    switch (alert_payload.TamperType) {
+    case 1: // Assuming 1 = Callback Table Modified
+        tamper_description = L"Driver callback table modified.";
+        break;
+    case 2: // Assuming 2 = Driver Memory Modified
+        tamper_description = L"Driver memory integrity compromised.";
+        break;
+    case 3: // Assuming 3 = SSDT Hook Detected
+        tamper_description = L"SSDT hook detected.";
+        break;
+        // Add more cases as defined in the kernel driver
+    }
+    log_entry << L"  Description: " << tamper_description << std::endl;
+
+
+    // Log to console/debug output for immediate visibility
+    OutputDebugStringW(log_entry.str().c_str());
+    std::wcout << log_entry.str(); // If console is available
+
+    // Log to file (using existing logging mechanism or a dedicated one)
+    if (config_.enable_logging && log_file_.is_open()) {
+        std::lock_guard<std::mutex> log_lock(log_mutex_);
+        log_file_ << L"--- TAMPER ALERT ---" << std::endl;
+        log_file_ << log_entry.str();
+        log_file_ << L"--------------------" << std::endl;
+        log_file_.flush();
+    }
+
+    // Generate an internal alert if an alert callback is registered
+    // This allows the main service logic to react (e.g., update UI, notify user)
+    if (alert_callback_) {
+        AlertInfo service_alert;
+        service_alert.severity = AlertSeverity::Critical; // Tamper alerts are always critical
+        service_alert.description = L"Kernel-level tamper detected: " + tamper_description;
+        service_alert.process_id = 0; // Typically not associated with a single user process
+        service_alert.file_path = L"N/A";
+        service_alert.timestamp = std::chrono::steady_clock::now();
+
+        // Potentially add more details from alert_payload if needed in AlertInfo
+        // service_alert.details = L"Tamper Code: " + std::to_wstring(alert_payload.TamperType);
+
+        // Call the registered alert callback
+        // Consider if this callback needs to be invoked on a specific thread (e.g., UI thread)
+        // For now, direct call.
+        try {
+            alert_callback_(service_alert);
+        }
+        catch (const std::exception& e) {
+            OutputDebugStringW((std::wstring(L"Exception in tamper alert_callback_: ") + Utils::StringToWideString(e.what())).c_str());
+            // Log error
+        }
+    }
+
+    // TODO: Implement further actions based on policy:
+    // - Notify administrator
+    // - Isolate the machine (if configured and capable)
+    // - Trigger a full system scan
+    // - Shut down or restart critical services (or the machine itself if it's a severe compromise)
+    // These actions would depend heavily on the overall architecture of CryptoShield.
+    // For now, logging and internal alert generation are the primary actions.
+}
+
 		std::wcout << L"[MessageProcessor] Stopped" << std::endl;
 	}
 
