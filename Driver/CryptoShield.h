@@ -72,21 +72,19 @@ typedef struct _CRYPTOSHIELD_CONTEXT {
     ULONG DriverImageSize;          // Size of the driver image
     ULONG64 InitialDriverChecksum;  // Checksum of the driver image calculated at load time
 
-    // Tamper Alert Worker Thread
-    PETHREAD TamperAlertThreadObject; // Pointer to the worker thread object
-    HANDLE TamperAlertThreadHandle;   // Handle for the worker thread
-    KEVENT TamperAlertQueueEvent;     // Event to signal new items in the queue
-    LIST_ENTRY TamperAlertQueueHead;  // Head of the tamper alert queue
-    KSPIN_LOCK TamperAlertQueueLock;  // Spinlock to protect the queue
-    BOOLEAN TerminateTamperAlertThread; // Flag to signal thread termination
-} CRYPTOSHIELD_CONTEXT, * PCRYPTOSHIELD_CONTEXT;
+    // --- INICIO DE NUEVOS MIEMBROS PARA WORKER THREAD ---
+    KSPIN_LOCK TamperAlertQueueLock;      // Spinlock para proteger la cola
+    LIST_ENTRY TamperAlertQueue;          // Cabeza de la lista (la cola)
+    PIO_WORKITEM TamperAlertWorkItem;       // El work item que procesará la cola
+    BOOLEAN IsWorkItemScheduled;          // Flag para evitar encolar trabajos si ya hay uno pendiente
+    // --- FIN DE NUEVOS MIEMBROS ---
+} CRYPTOSHIELD_CONTEXT, *PCRYPTOSHIELD_CONTEXT;
 
-// Structure for items in the tamper alert queue
-typedef struct _TAMPER_ALERT_ITEM {
-    LIST_ENTRY ListEntry;
-    ULONG TamperType;
-    // Add other relevant data if needed for the alert
-} TAMPER_ALERT_ITEM, *PTAMPER_ALERT_ITEM;
+// Estructura para cada elemento de trabajo
+typedef struct _TAMPER_ALERT_WORK_ITEM {
+    LIST_ENTRY ListEntry; // Para enlazar en la cola
+    CS_TAMPER_ALERT_PAYLOAD AlertPayload;
+} TAMPER_ALERT_WORK_ITEM, *PTAMPER_ALERT_WORK_ITEM;
 
 // Global driver context
 extern CRYPTOSHIELD_CONTEXT g_Context;
@@ -172,11 +170,18 @@ NTSTATUS SendMessageToUserService(
     _Inout_opt_ PULONG ReplyLength                 // Tamaño del buffer de respuesta / tamaño devuelto
 );
 
+// Worker routine for processing tamper alerts from the queue
+VOID ProcessTamperAlertQueueWorkRoutine(_In_ PVOID Context);
+
+
 // Tamper Alert Worker Thread functions (Communication.c or a new file like TamperAlert.c)
-NTSTATUS InitializeTamperAlertThread(VOID);
-VOID ShutdownTamperAlertThread(VOID);
-VOID TamperAlertThreadRoutine(_In_ PVOID StartContext);
-NTSTATUS QueueTamperAlert(_In_ ULONG TamperType);
+// These are now mostly handled by the IoWorkItem mechanism directly in DriverEntry/FilterUnload
+// and the DPC queuing logic. The functions below might be obsolete or refactored.
+// NTSTATUS InitializeTamperAlertThread(VOID); // Replaced by direct init in DriverEntry
+// VOID ShutdownTamperAlertThread(VOID);   // Replaced by direct cleanup in FilterUnload
+// VOID TamperAlertThreadRoutine(_In_ PVOID StartContext); // Replaced by ProcessTamperAlertQueueWorkRoutine
+NTSTATUS QueueTamperAlert(_In_ ULONG TamperType); // This logic will be part of IntegrityCheckDpcRoutine
+
 
 // Funciones de Monitoreo de Archivos (FileMonitor.c)
 NTSTATUS GetNormalizedFileNameInformation( // Renombrado de GetFileNameInformation

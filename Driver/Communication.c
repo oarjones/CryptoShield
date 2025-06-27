@@ -476,6 +476,86 @@ NTSTATUS QueueTamperAlert(_In_ ULONG TamperType)
 
 // ----- Funciones de Manejo de Mensajes Específicos -----
 
+// --- Implementación de ProcessTamperAlertQueueWorkRoutine ---
+/**
+ * @brief Processes tamper alerts from a work queue.
+ * @details This function is executed by a system worker thread when IoQueueWorkItem
+ *          is called with this routine. It dequeues items from g_Context.TamperAlertQueue
+ *          and sends them to the user-mode service.
+ * @param Context The PDEVICE_OBJECT originally passed to IoAllocateWorkItem, then to IoQueueWorkItem.
+ *                In our case, it's not directly used here as g_Context is global.
+ *                It can be NULL if no context was provided to IoQueueWorkItemEx.
+ * @note This routine runs at PASSIVE_LEVEL.
+ */
+VOID ProcessTamperAlertQueueWorkRoutine(_In_ PVOID Context)
+{
+    PTAMPER_ALERT_WORK_ITEM workItem;
+    PLIST_ENTRY listEntry;
+    KIRQL oldIrql;
+    NTSTATUS status;
+
+    UNREFERENCED_PARAMETER(Context); // Context is not used in this specific implementation
+                                     // as g_Context is global and g_Context.TamperAlertWorkItem is specific.
+
+    PAGED_CODE(); // Ensure this routine is pageable as it runs at PASSIVE_LEVEL
+
+    CS_LOG_INFO("ProcessTamperAlertQueueWorkRoutine started.");
+
+    // Loop to process all items currently in the queue
+    for (;;) {
+        // Acquire the lock to safely check the queue and remove an item
+        KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+
+        if (IsListEmpty(&g_Context.TamperAlertQueue)) {
+            // Queue is empty, mark that the work item is no longer scheduled
+            g_Context.IsWorkItemScheduled = FALSE;
+            KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+            CS_LOG_INFO("Tamper alert queue is empty. Work item routine exiting.");
+            break; // Exit the loop
+        }
+
+        // Remove the head of the list
+        listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
+        // We can release the lock now as the item is removed from the shared list
+        KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+
+        // Get the containing record (the actual work item structure)
+        workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
+
+        CS_LOG_INFO("Processing tamper alert from queue. Type: %u", workItem->AlertPayload.TamperType);
+
+        // Now it's safe to call SendMessageToUserService as we are at PASSIVE_LEVEL
+        status = SendMessageToUserService(
+            (PCS_MESSAGE_PAYLOAD_HEADER)&workItem->AlertPayload,
+            sizeof(CS_TAMPER_ALERT_PAYLOAD),
+            NULL,  // No reply expected for this alert
+            NULL   // No reply length
+        );
+
+        if (!NT_SUCCESS(status)) {
+            CS_LOG_WARNING("Failed to send tamper alert (Type: %u) to user service from work routine. Status: 0x%08X",
+                workItem->AlertPayload.TamperType, status);
+            // Depending on policy, might try to re-queue or log and drop.
+            // For now, just log and drop.
+        }
+        else {
+            CS_LOG_INFO("Tamper alert (Type: %u) sent successfully by work routine.", workItem->AlertPayload.TamperType);
+            InterlockedIncrement64(&g_Context.MessagesSentToUserMode);
+        }
+
+        // Free the memory allocated for this work item
+        CS_FREE_POOL(workItem);
+        workItem = NULL; // Good practice to NULL out freed pointers
+    }
+
+    // Note: IoFreeWorkItem is NOT called here. It's called when the driver unloads
+    // or if the work item is meant to be one-shot and then disposed of.
+    // This routine is designed to be re-queued.
+    CS_LOG_INFO("ProcessTamperAlertQueueWorkRoutine finished processing batch.");
+}
+// --- Fin de ProcessTamperAlertQueueWorkRoutine ---
+
+
 static NTSTATUS HandleStatusRequestMessage(
     _Out_writes_bytes_to_(OutputBufferLength, *ActualOutputLength) PVOID OutputBuffer,
     _In_ ULONG OutputBufferLength,

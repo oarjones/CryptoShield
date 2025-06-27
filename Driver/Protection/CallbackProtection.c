@@ -46,49 +46,118 @@ VOID IntegrityCheckDpcRoutine(
 {
     PCRYPTOSHIELD_CONTEXT context = (PCRYPTOSHIELD_CONTEXT)DeferredContext;
     SIZE_T comparisonResult;
+    BOOLEAN isTampered = FALSE;
+    ULONG tamperTypeDetected = 0; // To store the type of tamper
 
     UNREFERENCED_PARAMETER(Dpc);
     UNREFERENCED_PARAMETER(SystemArgument1);
     UNREFERENCED_PARAMETER(SystemArgument2);
 
     if (context == NULL || context->CallbackTableBackup == NULL || context->CallbackTableSize == 0) {
-        // This shouldn't happen if initialization was successful
         CS_LOG_ERROR("IntegrityCheckDpcRoutine: Invalid context or backup table.");
         return;
     }
+    if (context->IsUnloading) {
+        CS_LOG_INFO("IntegrityCheckDpcRoutine: Driver is unloading, skipping checks.");
+        return;
+    }
+    if (context->TamperAlertWorkItem == NULL) {
+        CS_LOG_ERROR("IntegrityCheckDpcRoutine: TamperAlertWorkItem is NULL. Cannot queue alerts.");
+        // This is a critical setup issue.
+        return;
+    }
 
-    // It's crucial to know the actual current address of 'Callbacks'.
-    // Since 'Callbacks' is an extern const global, its address is fixed at link time.
-    // We are comparing the live Callbacks table in .data/.rdata section with our backup.
+
+    // 1. Check Callback Table Integrity
     comparisonResult = RtlCompareMemory(Callbacks, context->CallbackTableBackup, context->CallbackTableSize);
-
     if (comparisonResult != context->CallbackTableSize) {
         CS_LOG_ERROR("¡ALERTA DE TAMPERING! La tabla de callbacks del driver ha sido modificada.");
-        QueueTamperAlert(TAMPER_TYPE_CALLBACK_TABLE_MODIFIED);
-        // Future: Attempt restoration if safe and configured.
+        isTampered = TRUE;
+        tamperTypeDetected = TAMPER_TYPE_CALLBACK_TABLE_MODIFIED;
+        // We'll queue one alert at the end if any tamper is detected.
     }
 
-    NTSTATUS integrityStatus;
-    BOOLEAN isIntact; // For IsDriverMemoryIntact, TRUE means intact.
-    BOOLEAN isHooked; // For IsSdtHooked, TRUE means a hook is detected.
-
-    // Check for driver memory modification
-    // IsDriverMemoryIntact now returns TRUE in isIntact if memory is NOT modified.
-    integrityStatus = IsDriverMemoryIntact(&isIntact);
-    if (!NT_SUCCESS(integrityStatus)) {
-        CS_LOG_ERROR("No se pudo verificar la integridad de la memoria del driver. Status: 0x%X", integrityStatus);
-    } else if (!isIntact) { // If memory is NOT intact (modified)
-        CS_LOG_ERROR("¡ALERTA DE TAMPERING! La memoria del driver ha sido modificada.");
-        QueueTamperAlert(TAMPER_TYPE_DRIVER_MEMORY_MODIFIED);
+    // 2. Check Driver Memory Integrity (if no tamper already found, or if we want to report all)
+    // For now, let's report the first one found.
+    if (!isTampered) {
+        NTSTATUS integrityStatus;
+        BOOLEAN isMemoryIntact; // TRUE if memory is NOT modified.
+        integrityStatus = IsDriverMemoryIntact(&isMemoryIntact);
+        if (!NT_SUCCESS(integrityStatus)) {
+            CS_LOG_ERROR("No se pudo verificar la integridad de la memoria del driver. Status: 0x%X", integrityStatus);
+        } else if (!isMemoryIntact) { // If memory is NOT intact (modified)
+            CS_LOG_ERROR("¡ALERTA DE TAMPERING! La memoria del driver ha sido modificada.");
+            isTampered = TRUE;
+            tamperTypeDetected = TAMPER_TYPE_DRIVER_MEMORY_MODIFIED;
+        }
     }
 
-    // Check for SSDT hooks
-    integrityStatus = IsSdtHooked(&isHooked);
-    if (!NT_SUCCESS(integrityStatus)) {
-        CS_LOG_ERROR("No se pudo verificar la SSDT en busca de hooks. Status: 0x%X", integrityStatus);
-    } else if (isHooked) { // If a hook IS detected
-        CS_LOG_ERROR("¡ALERTA DE TAMPERING! Se ha detectado un hook en la SSDT.");
-        QueueTamperAlert(TAMPER_TYPE_SSDT_HOOK_DETECTED);
+    // 3. Check for SSDT Hooks (if no tamper already found)
+    if (!isTampered) {
+        NTSTATUS integrityStatus;
+        BOOLEAN isSdtTampered; // TRUE if a hook IS detected.
+        integrityStatus = IsSdtHooked(&isSdtTampered);
+        if (!NT_SUCCESS(integrityStatus)) {
+            CS_LOG_ERROR("No se pudo verificar la SSDT en busca de hooks. Status: 0x%X", integrityStatus);
+        } else if (isSdtTampered) { // If a hook IS detected
+            CS_LOG_ERROR("¡ALERTA DE TAMPERING! Se ha detectado un hook en la SSDT.");
+            isTampered = TRUE;
+            tamperTypeDetected = TAMPER_TYPE_SSDT_HOOK_DETECTED;
+        }
+    }
+
+    // If any tampering was detected, queue a work item to send the alert
+    if (isTampered) {
+        PTAMPER_ALERT_WORK_ITEM workItem;
+        KIRQL oldIrql;
+
+        // 1. Allocate memory for the work item (must be from NonPagedPool as DPC runs at DISPATCH_LEVEL)
+        workItem = (PTAMPER_ALERT_WORK_ITEM)CS_ALLOCATE_POOL(NonPagedPoolNx, sizeof(TAMPER_ALERT_WORK_ITEM));
+        if (workItem == NULL) {
+            CS_LOG_ERROR("No se pudo asignar memoria para el work item de alerta de tampering (Tipo: %lu).", tamperTypeDetected);
+            return; // Salir si no hay memoria
+        }
+
+        // 2. Rellenar el payload
+        RtlZeroMemory(&workItem->AlertPayload, sizeof(CS_TAMPER_ALERT_PAYLOAD)); // Initialize fully
+        workItem->AlertPayload.Header.MessageType = MSG_TYPE_TAMPER_DETECTED;
+        // PayloadSize should be the size of the *entire* CS_TAMPER_ALERT_PAYLOAD structure
+        workItem->AlertPayload.Header.PayloadSize = sizeof(CS_TAMPER_ALERT_PAYLOAD);
+        // MessageId can be zero or a sequence number if needed later
+        workItem->AlertPayload.Header.MessageId = 0;
+        workItem->AlertPayload.TamperType = tamperTypeDetected;
+        // Timestamp and other fields can be added to CS_TAMPER_ALERT_PAYLOAD if needed.
+
+        CS_LOG_INFO("Tampering detectado (Tipo: %lu). Encolando alerta para envío.", tamperTypeDetected);
+
+        // 3. Poner el trabajo en la cola de forma segura
+        KeAcquireSpinLock(&context->TamperAlertQueueLock, &oldIrql);
+        InsertTailList(&context->TamperAlertQueue, &workItem->ListEntry);
+
+        // 4. Planificar la ejecución del worker thread si no está ya planificado
+        //    y el driver no se está descargando.
+        if (!context->IsWorkItemScheduled && !context->IsUnloading) {
+            context->IsWorkItemScheduled = TRUE;
+            // The context parameter for IoQueueWorkItem is g_Context.TamperAlertWorkItem->DeviceObject,
+            // but ProcessTamperAlertQueueWorkRoutine doesn't use its PVOID Context argument.
+            // So we can pass NULL or any other context if needed by the routine in the future.
+            // The third parameter to IoQueueWorkItem is the WorkQueueType. DelayedWorkQueue is common.
+            // The fourth parameter is the actual context passed to ProcessTamperAlertQueueWorkRoutine.
+            IoQueueWorkItem(context->TamperAlertWorkItem,
+                            ProcessTamperAlertQueueWorkRoutine,
+                            DelayedWorkQueue, // Or CriticalWorkQueue if higher priority needed
+                            NULL);            // Context for ProcessTamperAlertQueueWorkRoutine (can be NULL)
+            CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine encolado.");
+        } else {
+            if (context->IsWorkItemScheduled) {
+                CS_LOG_TRACE("Work item para ProcessTamperAlertQueueWorkRoutine ya estaba planificado. Nuevo item añadido a la cola.");
+            }
+            if (context->IsUnloading) {
+                 CS_LOG_INFO("Driver descargándose, no se planifica nuevo work item de alerta, pero el item fue añadido a la cola (se limpiará en unload).");
+                 // El item se limpiará en FilterUnloadCallback.
+            }
+        }
+        KeReleaseSpinLock(&context->TamperAlertQueueLock, oldIrql);
     }
 
     // Note: The DPC routine should complete as quickly as possible.
