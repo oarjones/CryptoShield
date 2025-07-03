@@ -9,6 +9,7 @@
 
 #include "MemoryIntegrity.h"
 #include "../CryptoShield.h" // Access to g_Context, CS_LOG_*, CS_ASSERT_IRQL_PASSIVE
+#include <ntstatus.h> // Added for STATUS_OBJECT_NOT_INITIALIZED
 
 /**
  * @brief Calculates a checksum of the specified memory region.

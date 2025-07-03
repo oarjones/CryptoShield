@@ -6,6 +6,7 @@
 
 #include "../CryptoShield.h"
 #include "HookDetection.h"
+#include <ntddk.h> // Added for ZwQuerySystemInformation and SYSTEM_INFORMATION_CLASS
 
 // Variable global para la información de ntoskrnl
 KERNEL_MODULE_INFO g_NtoskrnlInfo = { NULL, 0 };

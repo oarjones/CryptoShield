@@ -13,6 +13,7 @@
 #include "Protection/CallbackProtection.h"
 #include "Protection/MemoryIntegrity.h"
 #include "Protection/HookDetection.h"
+#include <fltKernel.h> // Added for FltStopFiltering and other FltXxx functions
 // ----- Global Driver Context -----
 CRYPTOSHIELD_CONTEXT g_Context = { 0 };
 
@@ -333,6 +334,7 @@ NTSTATUS DriverEntry(
     // If no such CDO exists, one should be created in DriverEntry.
     // Let's assume DriverObject->DeviceObject is acceptable as a fallback if no CDO is explicitly created by CryptoShield.
     // This is often the FDO of the driver stack.
+    // Using pDeviceObject which is DriverObject->DeviceObject
     g_Context.TamperAlertWorkItem = IoAllocateWorkItem(pDeviceObject);
 
 
@@ -417,37 +419,38 @@ NTSTATUS FilterUnloadCallback(
     // 1. Clean up any remaining items in the TamperAlertQueue
     // This must be done carefully, acquiring the lock.
     // The IsUnloading flag should prevent new items from being added by DPCs.
-    if (g_Context.TamperAlertQueueLock != NULL) { // Check if spinlock was initialized
-        KIRQL oldIrql;
-        CS_LOG_TRACE("Acquiring TamperAlertQueueLock for cleanup.");
-        KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
+    // The KSPIN_LOCK g_Context.TamperAlertQueueLock is a global structure member, initialized in DriverEntry.
+    // Checking it against NULL is not meaningful as it's not a pointer. KeAcquireSpinLock operates on it directly.
+    // Assuming DriverEntry initialized it, we can proceed to use it.
+    KIRQL oldIrql;
+    CS_LOG_TRACE("Acquiring TamperAlertQueueLock for cleanup.");
+    KeAcquireSpinLock(&g_Context.TamperAlertQueueLock, &oldIrql);
 
-        while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
-            listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
-            // Ensure listEntry is not NULL, though IsListEmpty should prevent this.
-            // However, if the list is corrupted, CONTAINING_RECORD could crash.
-            // Given this is unload path and under spinlock, corruption is less likely
-            // unless there was prior memory corruption.
-            if (listEntry == NULL) { // Should not happen with IsListEmpty check
-                 CS_LOG_ERROR("RemoveHeadList returned NULL from a non-empty list. Queue might be corrupted.");
-                 break;
-            }
-            workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
-            // workItem could be NULL if listEntry was bad.
-            if (workItem != NULL) { // Check if workItem is valid before accessing its members
-                CS_LOG_INFO("Freeing queued tamper alert work item (Type: %u) during unload.", workItem->AlertPayload.TamperType);
-                CS_FREE_POOL(workItem);
-            } else {
-                CS_LOG_ERROR("CONTAINING_RECORD resulted in NULL workItem. Skipping free for this entry.");
-                // This indicates a severe issue, potentially list corruption or bad cast.
-            }
+    while (!IsListEmpty(&g_Context.TamperAlertQueue)) {
+        listEntry = RemoveHeadList(&g_Context.TamperAlertQueue);
+        // Ensure listEntry is not NULL, though IsListEmpty should prevent this.
+        // However, if the list is corrupted, CONTAINING_RECORD could crash.
+        // Given this is unload path and under spinlock, corruption is less likely
+        // unless there was prior memory corruption.
+        if (listEntry == NULL) { // Should not happen with IsListEmpty check
+             CS_LOG_ERROR("RemoveHeadList returned NULL from a non-empty list. Queue might be corrupted.");
+             break;
         }
-        // g_Context.IsWorkItemScheduled is not critical to reset here as the work item is being freed.
-        KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
-        CS_LOG_TRACE("TamperAlertQueue drained.");
+        workItem = CONTAINING_RECORD(listEntry, TAMPER_ALERT_WORK_ITEM, ListEntry);
+        // workItem could be NULL if listEntry was bad.
+        if (workItem != NULL) { // Check if workItem is valid before accessing its members
+            CS_LOG_INFO("Freeing queued tamper alert work item (Type: %u) during unload.", workItem->AlertPayload.TamperType);
+            CS_FREE_POOL(workItem);
+        } else {
+            CS_LOG_ERROR("CONTAINING_RECORD resulted in NULL workItem. Skipping free for this entry.");
+            // This indicates a severe issue, potentially list corruption or bad cast.
+        }
     }
+    // g_Context.IsWorkItemScheduled is not critical to reset here as the work item is being freed.
+    KeReleaseSpinLock(&g_Context.TamperAlertQueueLock, oldIrql);
+    CS_LOG_TRACE("TamperAlertQueue drained.");
     // Ensure the spinlock itself is not accessed if it was never initialized,
-    // though in a normal flow it would be.
+    // though in a normal flow it would be. The check `g_Context.TamperAlertQueueLock != NULL` was removed.
 
 
     // 2. Free the IoWorkItem
